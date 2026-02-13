@@ -2,6 +2,7 @@ import { chromium } from "playwright-core"
 
 export async function launch(url) {
   const context = await chromium.launchPersistentContext("./profile", {
+    executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe",
     headless: false,
     viewport: null,
     args: ["--start-maximized"]
