@@ -91,8 +91,11 @@ function marionetaBoot() {
   <!-- Header -->
   <div style="display:flex;align-items:center;gap:6px;padding-bottom:8px;border-bottom:1px solid #1e293b;margin-bottom:8px">
     <span style="font-size:15px">🧪</span>
-    <span style="font-weight:700;font-size:13px;color:#f1f5f9;letter-spacing:.03em">Marioneta</span>
+    <span style="font-weight:700;font-size:13px;color:#f1f5f9;letter-spacing:.03em;flex:1">Marioneta</span>
   </div>
+
+  <!-- Contenido colapsable -->
+  <div id="m_body">
 
   <!-- Case name -->
   <div class="m_field">
@@ -141,6 +144,8 @@ function marionetaBoot() {
   <div id="m_tree" style="font-size:11px"></div>
 
 </div>
+
+</div>
 `
 
     const nodes = [...document.body.childNodes]
@@ -160,7 +165,29 @@ function marionetaBoot() {
 
     document.body.appendChild(overlay)
 
-    bind(panel, overlay)
+    // Botón toggle fijo, siempre visible en top-right
+    const toggleBtn = document.createElement("button")
+    toggleBtn.id = "m_toggle"
+    toggleBtn.textContent = "◀"
+    toggleBtn.title = "Colapsar"
+    Object.assign(toggleBtn.style, {
+      position: "fixed",
+      top: "6px",
+      right: "6px",
+      zIndex: 1000000,
+      background: "#1e293b",
+      border: "1px solid #334155",
+      color: "#e2e8f0",
+      borderRadius: "4px",
+      padding: "3px 7px",
+      cursor: "pointer",
+      fontFamily: "monospace",
+      fontSize: "11px",
+      lineHeight: "1"
+    })
+    document.body.appendChild(toggleBtn)
+
+    bind(panel, overlay, toggleBtn, root)
 
     // Carga cases guardados para esta URL
     fetch(`http://localhost:7331/cases?url=${encodeURIComponent(location.href)}`)
@@ -178,7 +205,7 @@ function marionetaBoot() {
     return true
   }
 
-  function bind(panel, overlay) {
+  function bind(panel, overlay, toggleBtn, root) {
     const info = panel.querySelector("#" + INFO)
     const actionSel = panel.querySelector("#m_action")
     const opts = panel.querySelector("#m_opts")
@@ -186,6 +213,19 @@ function marionetaBoot() {
     const positionSel = panel.querySelector("#m_position")
     const tree = panel.querySelector("#m_tree")
     const deleteBtn = panel.querySelector("#m_delete")
+
+    // Toggle colapsar/expandir
+    let collapsed = false
+    const body = panel.querySelector("#m_body")
+    toggleBtn.onclick = () => {
+      collapsed = !collapsed
+      body.style.display = collapsed ? "none" : ""
+      panel.style.width = collapsed ? "0" : "19%"
+      panel.style.padding = collapsed ? "0" : "8px"
+      root.style.gridTemplateColumns = collapsed ? "100% 0" : "80% 20%"
+      toggleBtn.textContent = collapsed ? "▶" : "◀"
+      toggleBtn.title = collapsed ? "Expandir" : "Colapsar"
+    }
 
     // Escape básico para evitar romper HTML del panel
     const safe = t => String(t)
