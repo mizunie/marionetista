@@ -25,23 +25,24 @@ function marionetaBoot() {
     if (document.getElementById(ROOT)) return true
 
     const root = document.createElement("div")
-    css(root, { display: "grid", gridTemplateColumns: "80% 20%" })
 
     const web = document.createElement("div")
 
     const panel = document.createElement("aside")
     css(panel, {
       position: "fixed",
-      right: 0,
-      top: 0,
-      width: "19%",
-      height: "100vh",
+      right: "12px",
+      top: "12px",
+      width: "260px",
+      maxHeight: "calc(100vh - 24px)",
       background: "#0f172a",
       color: "#e5e7eb",
       fontFamily: "monospace",
       padding: "8px",
       overflow: "auto",
-      zIndex: 999998
+      zIndex: 999998,
+      borderRadius: "8px",
+      boxShadow: "0 4px 24px rgba(0,0,0,.5)"
     })
 
     panel.innerHTML = `
@@ -82,16 +83,27 @@ function marionetaBoot() {
   #__marionetaPanel .m_divider { border: none; border-top: 1px solid #1e293b; margin: 8px 0; }
   #__marionetaPanel .m_field { margin-top: 6px; }
   #__marionetaPanel .m_row { display: flex; gap: 4px; align-items: center; }
-  #__marionetaPanel .m_row select,
-  #__marionetaPanel .m_row input { margin-top: 0; }
+  #__marionetaPanel .m_toggle {
+    background: none;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    font-size: 11px;
+    padding: 0 2px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  #__marionetaPanel .m_toggle:hover { color: #e2e8f0; }
 </style>
 
 <div id="__marionetaPanel" style="display:flex;flex-direction:column;gap:0">
 
   <!-- Header -->
-  <div style="display:flex;align-items:center;gap:6px;padding-bottom:8px;border-bottom:1px solid #1e293b;margin-bottom:8px">
+  <div id="m_header" style="display:flex;align-items:center;gap:6px;padding-bottom:8px;border-bottom:1px solid #1e293b;margin-bottom:8px;cursor:grab;user-select:none">
     <span style="font-size:15px">🧪</span>
     <span style="font-weight:700;font-size:13px;color:#f1f5f9;letter-spacing:.03em;flex:1">Marioneta</span>
+    <span id="m_status" title="Estado" style="width:8px;height:8px;border-radius:50%;background:#475569;flex-shrink:0;transition:background .2s"></span>
+    <button id="m_toggle" class="m_toggle" title="Colapsar">◀</button>
   </div>
 
   <!-- Contenido colapsable -->
@@ -165,29 +177,7 @@ function marionetaBoot() {
 
     document.body.appendChild(overlay)
 
-    // Botón toggle fijo, siempre visible en top-right
-    const toggleBtn = document.createElement("button")
-    toggleBtn.id = "m_toggle"
-    toggleBtn.textContent = "◀"
-    toggleBtn.title = "Colapsar"
-    Object.assign(toggleBtn.style, {
-      position: "fixed",
-      top: "6px",
-      right: "6px",
-      zIndex: 1000000,
-      background: "#1e293b",
-      border: "1px solid #334155",
-      color: "#e2e8f0",
-      borderRadius: "4px",
-      padding: "3px 7px",
-      cursor: "pointer",
-      fontFamily: "monospace",
-      fontSize: "11px",
-      lineHeight: "1"
-    })
-    document.body.appendChild(toggleBtn)
-
-    bind(panel, overlay, toggleBtn, root)
+    bind(panel, overlay)
 
     // Carga cases guardados para esta URL
     fetch(`http://localhost:7331/cases?url=${encodeURIComponent(location.href)}`)
@@ -205,7 +195,7 @@ function marionetaBoot() {
     return true
   }
 
-  function bind(panel, overlay, toggleBtn, root) {
+  function bind(panel, overlay) {
     const info = panel.querySelector("#" + INFO)
     const actionSel = panel.querySelector("#m_action")
     const opts = panel.querySelector("#m_opts")
@@ -213,16 +203,57 @@ function marionetaBoot() {
     const positionSel = panel.querySelector("#m_position")
     const tree = panel.querySelector("#m_tree")
     const deleteBtn = panel.querySelector("#m_delete")
+    const statusDot = panel.querySelector("#m_status")
+    const header = panel.querySelector("#m_header")
+    const toggleBtn = panel.querySelector("#m_toggle")
+
+    // Indicador de estado
+    function updateStatus() {
+      if (editingIndex !== null) {
+        statusDot.style.background = "#3b82f6"  // azul = editando
+        statusDot.title = "Editando step"
+      } else if (frozen) {
+        statusDot.style.background = "#22c55e"  // verde = selector activo
+        statusDot.title = "Selector capturado"
+      } else {
+        statusDot.style.background = "#475569"  // gris = idle
+        statusDot.title = "Sin selección"
+      }
+    }
+
+    // Drag del panel
+    let dragging = false, dragOffX = 0, dragOffY = 0
+    header.addEventListener("mousedown", e => {
+      if (e.button !== 0) return
+      dragging = true
+      dragOffX = e.clientX - panel.getBoundingClientRect().left
+      dragOffY = e.clientY - panel.getBoundingClientRect().top
+      header.style.cursor = "grabbing"
+    })
+    document.addEventListener("mousemove", e => {
+      if (!dragging) return
+      const newTop = Math.max(0, e.clientY - dragOffY)
+      panel.style.left = (e.clientX - dragOffX) + "px"
+      panel.style.right = "auto"
+      panel.style.top = newTop + "px"
+      panel.style.maxHeight = `calc(100vh - ${newTop}px)`
+    })
+    document.addEventListener("mouseup", () => {
+      if (!dragging) return
+      dragging = false
+      header.style.cursor = "grab"
+    })
 
     // Toggle colapsar/expandir
     let collapsed = false
     const body = panel.querySelector("#m_body")
-    toggleBtn.onclick = () => {
+    toggleBtn.onclick = e => {
+      e.stopPropagation()
       collapsed = !collapsed
       body.style.display = collapsed ? "none" : ""
-      panel.style.width = collapsed ? "0" : "19%"
-      panel.style.padding = collapsed ? "0" : "8px"
-      root.style.gridTemplateColumns = collapsed ? "100% 0" : "80% 20%"
+      header.style.borderBottom = collapsed ? "none" : "1px solid #1e293b"
+      header.style.marginBottom = collapsed ? "0" : "8px"
+      header.style.paddingBottom = collapsed ? "0" : "8px"
       toggleBtn.textContent = collapsed ? "▶" : "◀"
       toggleBtn.title = collapsed ? "Expandir" : "Colapsar"
     }
@@ -241,6 +272,7 @@ function marionetaBoot() {
       caseInput.value = ""
       actionSel.value = "click"
       deleteBtn.style.display = "none"
+      updateStatus()
       renderOpts()
       refreshPositionSelect()
       renderTree()
@@ -304,6 +336,7 @@ function marionetaBoot() {
       // Actualiza el select de posición mostrando dónde está y opciones de mover
       updatePositionSelect(cn, idx)
       deleteBtn.style.display = "inline"
+      updateStatus()
       renderTree()
     }
 
@@ -510,6 +543,8 @@ function marionetaBoot() {
       overlay.style.left = r.left + "px"
       overlay.style.width = r.width + "px"
       overlay.style.height = r.height + "px"
+      overlay.style.borderColor = editingIndex !== null ? "#3b82f6" : "#22c55e"
+      overlay.style.background   = editingIndex !== null ? "rgba(59,130,246,.1)" : "rgba(34,197,94,.15)"
 
       const meta = {
         tag: el.tagName.toLowerCase(),
@@ -523,14 +558,22 @@ function marionetaBoot() {
       }
 
       const selector = buildSelector(el)
-      if (editingIndex === null) frozen = selector
+      if (editingIndex === null) {
+        frozen = selector
+        updateStatus()
+      }
+
+      // Color del bloque selector según estado
+      const selectorBg    = editingIndex !== null ? "#0f1e3a" : "#0f2a1a"
+      const selectorBorder = editingIndex !== null ? "#3b82f6" : "#22c55e"
+      const selectorColor  = editingIndex !== null ? "#93c5fd" : "#4ade80"
 
       info.innerHTML = `
 <div style="display:grid;grid-template-columns:auto 1fr;gap:1px 6px">
   <span style="color:#475569">&lt;${meta.tag}&gt;</span><span style="color:#94a3b8">${safe(meta.id !== "-" ? "#"+meta.id : meta.testid !== "-" ? meta.testid : meta.name !== "-" ? meta.name : "")}</span>
   <span style="color:#475569">text</span><span style="color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${safe(meta.text)}"</span>
 </div>
-<div style="margin-top:5px;padding:4px 6px;background:#0f2a1a;border-radius:4px;border-left:2px solid #22c55e;color:#4ade80;word-break:break-all">${selector}</div>
+<div style="margin-top:5px;padding:4px 6px;background:${selectorBg};border-radius:4px;border-left:2px solid ${selectorBorder};color:${selectorColor};word-break:break-all">${editingIndex !== null ? frozen : selector}</div>
 `
     })
 
