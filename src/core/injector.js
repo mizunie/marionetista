@@ -45,39 +45,102 @@ function marionetaBoot() {
     })
 
     panel.innerHTML = `
-<strong>🧪 Marioneta</strong>
+<style>
+  #__marionetaPanel * { box-sizing: border-box; }
+  #__marionetaPanel input,
+  #__marionetaPanel select,
+  #__marionetaPanel textarea {
+    width: 100%;
+    background: #1e293b;
+    color: #e2e8f0;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-family: monospace;
+    font-size: 11px;
+    outline: none;
+    margin-top: 3px;
+  }
+  #__marionetaPanel input:focus,
+  #__marionetaPanel select:focus,
+  #__marionetaPanel textarea:focus { border-color: #3b82f6; }
+  #__marionetaPanel textarea { resize: vertical; min-height: 40px; }
+  #__marionetaPanel label { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: .05em; }
+  #__marionetaPanel .m_btn {
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #e2e8f0;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background .15s;
+  }
+  #__marionetaPanel .m_btn:hover { background: #334155; }
+  #__marionetaPanel .m_btn.primary { border-color: #3b82f6; }
+  #__marionetaPanel .m_btn.danger  { border-color: #ef4444; }
+  #__marionetaPanel .m_divider { border: none; border-top: 1px solid #1e293b; margin: 8px 0; }
+  #__marionetaPanel .m_field { margin-top: 6px; }
+  #__marionetaPanel .m_row { display: flex; gap: 4px; align-items: center; }
+  #__marionetaPanel .m_row select,
+  #__marionetaPanel .m_row input { margin-top: 0; }
+</style>
 
-<!-- Case actual -->
-<input id="m_case" placeholder="case (ej: login)" style="width:100%;margin:4px 0">
+<div id="__marionetaPanel" style="display:flex;flex-direction:column;gap:0">
 
-<div id="${INFO}"></div>
-<hr>
+  <!-- Header -->
+  <div style="display:flex;align-items:center;gap:6px;padding-bottom:8px;border-bottom:1px solid #1e293b;margin-bottom:8px">
+    <span style="font-size:15px">🧪</span>
+    <span style="font-weight:700;font-size:13px;color:#f1f5f9;letter-spacing:.03em">Marioneta</span>
+  </div>
 
-<select id="m_action">
-  <option value="click">click</option>
-  <option value="assert">assert</option>
-  <option value="hover">hover</option>
-  <option value="fill">fill</option>
-  <option value="clickfill">click & fill</option>
-  <option value="if">if</option>
-</select>
+  <!-- Case name -->
+  <div class="m_field">
+    <label>Case</label>
+    <input id="m_case" placeholder="ej: login">
+  </div>
 
-<div id="m_opts"></div>
+  <!-- Inspector info -->
+  <div id="${INFO}" style="margin-top:8px;font-size:10px;color:#64748b;line-height:1.6"></div>
 
-<div style="margin-top:4px">
-  <label style="font-size:11px">Posición:</label>
-  <select id="m_position" style="width:100%"><option value="end">end</option></select>
+  <hr class="m_divider">
+
+  <!-- Acción -->
+  <div class="m_field">
+    <label>Acción</label>
+    <select id="m_action">
+      <option value="click">click</option>
+      <option value="assert">assert</option>
+      <option value="hover">hover</option>
+      <option value="fill">fill</option>
+      <option value="clickfill">click & fill</option>
+      <option value="if">if</option>
+    </select>
+  </div>
+
+  <!-- Opciones dinámicas -->
+  <div id="m_opts"></div>
+
+  <!-- Posición -->
+  <div class="m_field">
+    <label>Posición</label>
+    <select id="m_position"><option value="end">end</option></select>
+  </div>
+
+  <!-- Botones -->
+  <div class="m_row" style="margin-top:10px">
+    <button id="m_ok"       class="m_btn primary" title="Guardar step">✅</button>
+    <button id="m_cancel"   class="m_btn"         title="Cancelar">❌</button>
+    <button id="m_delete"   class="m_btn danger"  title="Eliminar step" style="display:none">🗑️</button>
+    <button id="m_generate" class="m_btn"         title="Generar tests" style="margin-left:auto">🚀</button>
+  </div>
+
+  <hr class="m_divider">
+
+  <!-- Árbol de cases -->
+  <div id="m_tree" style="font-size:11px"></div>
+
 </div>
-
-<div style="margin-top:6px">
-  <button id="m_ok">✅</button>
-  <button id="m_cancel">❌</button>
-  <button id="m_delete" style="display:none">🗑️</button>
-  <button id="m_generate">🚀</button>
-</div>
-
-<hr>
-<div id="m_tree" style="font-size:11px"></div>
 `
 
     const nodes = [...document.body.childNodes]
@@ -152,30 +215,27 @@ function marionetaBoot() {
         const steps = cases[cn] || []
         const stepsHtml = steps.map((s, i) => {
           const isEditing = editingCase === cn && editingIndex === i
-          const label = `${s.action} → ${s.selector.slice(0, 30)}${s.selector.length > 30 ? "…" : ""}`
+          const label = `${s.action} → ${s.selector.slice(0, 28)}${s.selector.length > 28 ? "…" : ""}`
           return `<div data-case="${safe(cn)}" data-idx="${i}" class="m_step"
-            style="padding:2px 4px;margin:1px 0;cursor:pointer;border-radius:3px;
-            background:${isEditing ? "#1e40af" : "#1e293b"};
-            border-left:2px solid ${isEditing ? "#60a5fa" : "#334155"}">
-            Step ${i + 1}: ${safe(label)}
+            style="padding:3px 6px;margin:2px 0;cursor:pointer;border-radius:4px;font-size:10px;
+            background:${isEditing ? "#1e3a5f" : "transparent"};
+            border:1px solid ${isEditing ? "#3b82f6" : "#1e293b"};
+            color:${isEditing ? "#93c5fd" : "#94a3b8"};
+            transition:background .1s">
+            <span style="color:${isEditing ? "#60a5fa" : "#475569"};margin-right:4px">${i + 1}.</span>${safe(label)}
           </div>`
         }).join("")
 
-        return `<div style="margin-bottom:6px">
-          <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">
-            <span style="color:#94a3b8;font-weight:bold;flex:1">${safe(cn)}</span>
-          </div>
+        return `<div style="margin-bottom:8px">
+          <div style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;padding-left:2px">${safe(cn)}</div>
           ${stepsHtml}
         </div>`
       }).join("")
 
-      // Click en step → carga datos para editar
       tree.querySelectorAll(".m_step").forEach(el => {
-        el.onclick = () => {
-          const cn = el.dataset.case
-          const idx = parseInt(el.dataset.idx)
-          loadStepForEdit(cn, idx)
-        }
+        el.onmouseenter = () => { if (editingCase !== el.dataset.case || editingIndex !== +el.dataset.idx) el.style.background = "#1e293b" }
+        el.onmouseleave = () => { if (editingCase !== el.dataset.case || editingIndex !== +el.dataset.idx) el.style.background = "transparent" }
+        el.onclick = () => loadStepForEdit(el.dataset.case, parseInt(el.dataset.idx))
       })
     }
 
@@ -258,38 +318,42 @@ function marionetaBoot() {
       const a = actionSel.value
 
       if (a === "click") opts.innerHTML = `
-Clicks <input id="m_count" type="number" value="1" min="1" style="width:50px">
-<select id="m_btn">
-<option>left</option><option>right</option><option>middle</option>
-</select>
-<select id="m_dur"><option>short</option><option>long</option></select>`
+<div class="m_field">
+  <div class="m_row">
+    <div style="flex:1"><label>Clicks</label><input id="m_count" type="number" value="1" min="1"></div>
+    <div style="flex:1"><label>Botón</label><select id="m_btn"><option>left</option><option>right</option><option>middle</option></select></div>
+    <div style="flex:1"><label>Duración</label><select id="m_dur"><option>short</option><option>long</option></select></div>
+  </div>
+</div>`
 
       else if (a === "assert") opts.innerHTML = `
-<select id="m_assert">
-<option>visible</option>
-<option>hidden</option>
-<option>count</option>
-<option>toHaveText</option>
-<option>selected</option>
-</select>`
+<div class="m_field">
+  <label>Condición</label>
+  <select id="m_assert">
+    <option>visible</option><option>hidden</option><option>count</option>
+    <option>toHaveText</option><option>selected</option>
+  </select>
+</div>`
 
-      else if (a === "fill") opts.innerHTML = `
-<input id="m_value" placeholder="value">`
-
-      else if (a === "clickfill") opts.innerHTML = `
-<input id="m_value" placeholder="value">`
+      else if (a === "fill" || a === "clickfill") opts.innerHTML = `
+<div class="m_field">
+  <label>Valor</label>
+  <input id="m_value" placeholder="value">
+</div>`
 
       else if (a === "if") opts.innerHTML = `
-<select id="m_if">
-<option>visible</option>
-<option>checked</option>
-<option>exists</option>
-</select>`
+<div class="m_field">
+  <label>Condición</label>
+  <select id="m_if"><option>visible</option><option>checked</option><option>exists</option></select>
+</div>`
 
       else opts.innerHTML = ``
 
-      // Notas siempre disponibles
-      opts.innerHTML += `<textarea id="m_notas" placeholder="Notas" style="width:100%"></textarea>`
+      opts.innerHTML += `
+<div class="m_field">
+  <label>Notas</label>
+  <textarea id="m_notas" placeholder="Notas opcionales..."></textarea>
+</div>`
     }
 
     renderOpts()
@@ -422,15 +486,11 @@ Clicks <input id="m_count" type="number" value="1" min="1" style="width:50px">
       if (editingIndex === null) frozen = selector
 
       info.innerHTML = `
-<div>tag: &lt;${meta.tag}&gt;</div>
-<div>id: ${safe(meta.id)}</div>
-<div>data-testid: ${safe(meta.testid)}</div>
-<div>data-test: ${safe(meta.datatest)}</div>
-<div>name: ${safe(meta.name)}</div>
-<div>role: ${safe(meta.role)}</div>
-<div>class: ${safe(meta.class)}</div>
-<div>text: "${safe(meta.text)}"</div>
-<div style="margin-top:6px;color:#22c55e">Selector: ${selector}</div>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:1px 6px">
+  <span style="color:#475569">&lt;${meta.tag}&gt;</span><span style="color:#94a3b8">${safe(meta.id !== "-" ? "#"+meta.id : meta.testid !== "-" ? meta.testid : meta.name !== "-" ? meta.name : "")}</span>
+  <span style="color:#475569">text</span><span style="color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${safe(meta.text)}"</span>
+</div>
+<div style="margin-top:5px;padding:4px 6px;background:#0f2a1a;border-radius:4px;border-left:2px solid #22c55e;color:#4ade80;word-break:break-all">${selector}</div>
 `
     })
 
