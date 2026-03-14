@@ -1,6 +1,7 @@
 import http from "http"
 import fs from "fs"
 import path from "path"
+import { execSync } from "child_process"
 
 const PORT = 7331
 
@@ -68,6 +69,41 @@ export function startCasesServer() {
     }
 
     const reqUrl = new URL(req.url, `http://localhost:${PORT}`)
+
+    // POST /run  { url, caseName }
+    if (req.method === "POST" && reqUrl.pathname === "/run") {
+      try {
+        const { url, caseName } = await readBody(req)
+        const host = new URL(url).hostname.replaceAll(".", "_")
+        const dir = path.join(process.cwd(), "generated", host)
+
+        if (!fs.existsSync(dir)) {
+          res.writeHead(404)
+          return res.end("Directorio generado no encontrado")
+        }
+
+        // Instalar solo si no hay node_modules
+        if (!fs.existsSync(path.join(dir, "node_modules"))) {
+          console.log("📦 Instalando dependencias en", dir)
+          execSync("pnpm i", { cwd: dir, stdio: "inherit" })
+        }
+
+        console.log(`▶️  Ejecutando case "${caseName}"`)
+        try {
+          execSync(`pnpm playwright test --grep "${caseName}"`, { cwd: dir, stdio: "inherit" })
+          res.writeHead(200, { "Content-Type": "application/json" })
+          res.end(JSON.stringify({ ok: true }))
+        } catch {
+          // playwright devuelve exit code != 0 si hay fallos, pero el output ya se imprimió
+          res.writeHead(200, { "Content-Type": "application/json" })
+          res.end(JSON.stringify({ ok: false, msg: "Test finalizado con fallos, revisa la consola" }))
+        }
+      } catch (e) {
+        res.writeHead(400)
+        res.end(e.message)
+      }
+      return
+    }
 
     // POST /cases  { url, caseName, steps }
     if (req.method === "POST" && reqUrl.pathname === "/cases") {

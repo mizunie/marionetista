@@ -256,6 +256,14 @@ function marionetaBoot() {
       header.style.paddingBottom = collapsed ? "0" : "8px"
       toggleBtn.textContent = collapsed ? "▶" : "◀"
       toggleBtn.title = collapsed ? "Expandir" : "Colapsar"
+      // Al colapsar, apagar el inspector visual
+      if (collapsed) {
+        overlay.style.display = "none"
+        paused = true
+      } else {
+        overlay.style.display = ""
+        paused = false
+      }
     }
 
     // Escape básico para evitar romper HTML del panel
@@ -302,6 +310,8 @@ function marionetaBoot() {
           <div style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;padding-left:2px;display:flex;align-items:center;gap:5px">
             <span style="flex:1">${safe(cn)}</span>
             <span style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:0 5px;font-size:9px;color:#64748b">${steps.length}</span>
+            <button data-run-case="${safe(cn)}" title="Ejecutar test"
+              style="background:none;border:none;cursor:pointer;color:#22c55e;padding:0;font-size:11px;line-height:1">▶</button>
           </div>
           ${stepsHtml}
         </div>`
@@ -311,6 +321,24 @@ function marionetaBoot() {
         el.onmouseenter = () => { if (editingCase !== el.dataset.case || editingIndex !== +el.dataset.idx) el.style.background = "#1e293b" }
         el.onmouseleave = () => { if (editingCase !== el.dataset.case || editingIndex !== +el.dataset.idx) el.style.background = "transparent" }
         el.onclick = () => loadStepForEdit(el.dataset.case, parseInt(el.dataset.idx))
+      })
+
+      tree.querySelectorAll("[data-run-case]").forEach(btn => {
+        btn.onclick = async e => {
+          e.stopPropagation()
+          const cn = btn.dataset.runCase
+          btn.textContent = "⏳"
+          btn.style.pointerEvents = "none"
+          const res = await fetch("http://localhost:7331/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: location.href, caseName: cn })
+          }).catch(() => null)
+          const data = res ? await res.json().catch(() => ({})) : {}
+          btn.textContent = data.ok ? "✅" : "❌"
+          btn.style.pointerEvents = ""
+          setTimeout(() => { btn.textContent = "▶"; }, 3000)
+        }
       })
     }
 
@@ -556,6 +584,8 @@ function marionetaBoot() {
         datatest: el.getAttribute("data-test") || "-",
         name: el.getAttribute("name") || "-",
         role: el.getAttribute("role") || "-",
+        aria: el.getAttribute("aria-label") || "-",
+        placeholder: el.getAttribute("placeholder") || "-",
         class: el.className || "-",
         text: (el.innerText || "").trim().slice(0, 80)
       }
@@ -577,6 +607,8 @@ function marionetaBoot() {
       info.innerHTML = `
 <div style="display:grid;grid-template-columns:auto 1fr;gap:1px 6px">
   <span style="color:#475569">&lt;${meta.tag}&gt;</span><span style="color:#94a3b8">${safe(meta.id !== "-" ? "#"+meta.id : meta.testid !== "-" ? meta.testid : meta.name !== "-" ? meta.name : "")}</span>
+  ${meta.aria !== "-" ? `<span style="color:#475569">aria</span><span style="color:#94a3b8">${safe(meta.aria)}</span>` : ""}
+  ${meta.placeholder !== "-" ? `<span style="color:#475569">placeholder</span><span style="color:#94a3b8">${safe(meta.placeholder)}</span>` : ""}
   <span style="color:#475569">text</span><span style="color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${safe(meta.text)}"</span>
 </div>
 <div style="margin-top:5px;padding:4px 6px;background:${selectorBg};border-radius:4px;border-left:2px solid ${selectorBorder};color:${selectorColor};word-break:break-all">${editingIndex !== null ? frozen : selector}</div>
@@ -601,9 +633,17 @@ ${warningHtml}
 
     const role = el.getAttribute("role")
     const text = (el.innerText || "").trim()
+    const aria = el.getAttribute("aria-label")
+    const placeholder = el.getAttribute("placeholder")
 
     if (role && text)
       return { selector: `page.getByRole("${role}", { name: "${text}" })`, weak: false }
+
+    if (aria)
+      return { selector: `page.getByLabel("${aria}")`, weak: false }
+
+    if (placeholder)
+      return { selector: `page.getByPlaceholder("${placeholder}")`, weak: false }
 
     if (text) return { selector: `page.getByText("${text}")`, weak: false }
 
