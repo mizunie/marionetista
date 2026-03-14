@@ -83,6 +83,24 @@ export function startCasesServer() {
       return
     }
 
+    // DELETE /cases  { url, caseName }
+    if (req.method === "DELETE" && reqUrl.pathname === "/cases") {
+      try {
+        const { url, caseName } = await readBody(req)
+        const filePath = caseFilePath(url, caseName)
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath)
+          console.log("🗑️  Case eliminado →", filePath)
+        }
+        res.writeHead(200, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ ok: true }))
+      } catch (e) {
+        res.writeHead(400)
+        res.end(e.message)
+      }
+      return
+    }
+
     // GET /cases?url=...
     if (req.method === "GET" && reqUrl.pathname === "/cases") {
       const url = reqUrl.searchParams.get("url")

@@ -72,6 +72,7 @@ function marionetaBoot() {
 <div style="margin-top:6px">
   <button id="m_ok">✅</button>
   <button id="m_cancel">❌</button>
+  <button id="m_delete" style="display:none">🗑️</button>
   <button id="m_generate">🚀</button>
 </div>
 
@@ -121,12 +122,26 @@ function marionetaBoot() {
     const caseInput = panel.querySelector("#m_case")
     const positionSel = panel.querySelector("#m_position")
     const tree = panel.querySelector("#m_tree")
+    const deleteBtn = panel.querySelector("#m_delete")
 
     // Escape básico para evitar romper HTML del panel
     const safe = t => String(t)
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
+
+    // Limpia el panel a estado inicial
+    function resetPanel() {
+      frozen = null
+      editingCase = null
+      editingIndex = null
+      caseInput.value = ""
+      actionSel.value = "click"
+      deleteBtn.style.display = "none"
+      renderOpts()
+      refreshPositionSelect()
+      renderTree()
+    }
 
     // Renderiza el árbol de cases y steps debajo del 🚀
     function renderTree() {
@@ -147,7 +162,9 @@ function marionetaBoot() {
         }).join("")
 
         return `<div style="margin-bottom:6px">
-          <div style="color:#94a3b8;font-weight:bold;margin-bottom:2px">${safe(cn)}</div>
+          <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">
+            <span style="color:#94a3b8;font-weight:bold;flex:1">${safe(cn)}</span>
+          </div>
           ${stepsHtml}
         </div>`
       }).join("")
@@ -186,6 +203,7 @@ function marionetaBoot() {
 
       // Actualiza el select de posición mostrando dónde está y opciones de mover
       updatePositionSelect(cn, idx)
+      deleteBtn.style.display = "inline"
       renderTree()
     }
 
@@ -285,15 +303,35 @@ Clicks <input id="m_count" type="number" value="1" min="1" style="width:50px">
 
     // Cancela edición o limpia selector
     panel.querySelector("#m_cancel").onclick = () => {
-      frozen = null
-      editingCase = null
-      editingIndex = null
-      refreshPositionSelect()
-      renderTree()
+      resetPanel()
     }
 
     panel.querySelector("#m_generate").onclick = () => {
       window.__marionetaGenerate(cases)
+    }
+
+    // Elimina el step que se está editando
+    deleteBtn.onclick = async () => {
+      if (editingCase === null || editingIndex === null) return
+      const cn = editingCase
+      const idx = editingIndex
+      cases[cn].splice(idx, 1)
+      // Si el case quedó vacío, eliminarlo
+      if (cases[cn].length === 0) {
+        delete cases[cn]
+        await fetch("http://localhost:7331/cases", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: location.href, caseName: cn })
+        }).catch(() => {})
+      } else {
+        await fetch("http://localhost:7331/cases", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: location.href, caseName: cn, steps: cases[cn] })
+        }).catch(() => {})
+      }
+      resetPanel()
     }
 
     // Resuelve el índice de inserción según el select de posición
@@ -349,8 +387,7 @@ Clicks <input id="m_count" type="number" value="1" min="1" style="width:50px">
         })
       }).catch(() => {})
 
-      refreshPositionSelect()
-      renderTree()
+      resetPanel()
     }
 
     let last = 0
