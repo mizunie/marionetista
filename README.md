@@ -6,7 +6,7 @@ Grabador visual de tests E2E para Playwright. Abre cualquier web, apunta con el 
 
 1. Lanzas Marioneta apuntando a una URL
 2. Un panel flotante aparece sobre la página
-3. Haces hover sobre los elementos que quieres testear — el inspector los resalta y construye el selector automáticamente
+3. Haces hover sobre los elementos que quieres testear — el inspector los resalta y construye el selector automáticamente. Puedes congelar el elemento resaltado con la tecla `Pause` del teclado
 4. Eliges la acción (click, fill, assert, hover...), el case al que pertenece y guardas el paso con ✅
 5. Los pasos se persisten en disco en `generated/<host>/cases/<path>/<case>.json`
 6. Cuando tienes el flujo completo, pulsas 🚀 y la IA genera el código Playwright completo en `generated/<host>/src/`
