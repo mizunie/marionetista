@@ -299,7 +299,10 @@ function marionetaBoot() {
         }).join("")
 
         return `<div style="margin-bottom:8px">
-          <div style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;padding-left:2px">${safe(cn)}</div>
+          <div style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;padding-left:2px;display:flex;align-items:center;gap:5px">
+            <span style="flex:1">${safe(cn)}</span>
+            <span style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:0 5px;font-size:9px;color:#64748b">${steps.length}</span>
+          </div>
           ${stepsHtml}
         </div>`
       }).join("")
@@ -557,16 +560,19 @@ function marionetaBoot() {
         text: (el.innerText || "").trim().slice(0, 80)
       }
 
-      const selector = buildSelector(el)
+      const { selector, weak } = buildSelector(el)
       if (editingIndex === null) {
         frozen = selector
         updateStatus()
       }
 
-      // Color del bloque selector según estado
-      const selectorBg    = editingIndex !== null ? "#0f1e3a" : "#0f2a1a"
-      const selectorBorder = editingIndex !== null ? "#3b82f6" : "#22c55e"
-      const selectorColor  = editingIndex !== null ? "#93c5fd" : "#4ade80"
+      // Color del bloque selector según estado y calidad
+      const selectorBg     = editingIndex !== null ? "#0f1e3a" : weak ? "#1a1200" : "#0f2a1a"
+      const selectorBorder = editingIndex !== null ? "#3b82f6" : weak ? "#f59e0b" : "#22c55e"
+      const selectorColor  = editingIndex !== null ? "#93c5fd" : weak ? "#fbbf24" : "#4ade80"
+      const warningHtml    = weak && editingIndex === null
+        ? `<div style="color:#f59e0b;font-size:9px;margin-top:3px">⚠️ Selector genérico, puede ser frágil</div>`
+        : ""
 
       info.innerHTML = `
 <div style="display:grid;grid-template-columns:auto 1fr;gap:1px 6px">
@@ -574,6 +580,7 @@ function marionetaBoot() {
   <span style="color:#475569">text</span><span style="color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${safe(meta.text)}"</span>
 </div>
 <div style="margin-top:5px;padding:4px 6px;background:${selectorBg};border-radius:4px;border-left:2px solid ${selectorBorder};color:${selectorColor};word-break:break-all">${editingIndex !== null ? frozen : selector}</div>
+${warningHtml}
 `
     })
 
@@ -585,22 +592,22 @@ function marionetaBoot() {
   // Heurística de selector optimizada para Playwright
   function buildSelector(el) {
     const t = el.getAttribute("data-testid")
-    if (t) return `page.getByTestId("${t}")`
+    if (t) return { selector: `page.getByTestId("${t}")`, weak: false }
 
     const d = el.getAttribute("data-test")
-    if (d) return `page.locator('[data-test="${d}"]')`
+    if (d) return { selector: `page.locator('[data-test="${d}"]')`, weak: false }
 
-    if (el.id) return `page.locator("#${el.id}")`
+    if (el.id) return { selector: `page.locator("#${el.id}")`, weak: false }
 
     const role = el.getAttribute("role")
     const text = (el.innerText || "").trim()
 
     if (role && text)
-      return `page.getByRole("${role}", { name: "${text}" })`
+      return { selector: `page.getByRole("${role}", { name: "${text}" })`, weak: false }
 
-    if (text) return `page.getByText("${text}")`
+    if (text) return { selector: `page.getByText("${text}")`, weak: false }
 
-    return `page.locator("${el.tagName.toLowerCase()}")`
+    return { selector: `page.locator("${el.tagName.toLowerCase()}")`, weak: true }
   }
 
   // Espera a que el body exista antes de montar Marioneta
