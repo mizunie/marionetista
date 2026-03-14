@@ -14,6 +14,7 @@ function marionetaBoot() {
   let frozen = null            // Selector actualmente fijado
   let editingCase = null       // Case que se está editando
   let editingIndex = null      // Índice del step que se está editando
+  const selectedCases = new Set() // Cases marcados para generar
 
   // Almacena pasos agrupados por case
   const cases = Object.create(null)
@@ -94,6 +95,36 @@ function marionetaBoot() {
     flex-shrink: 0;
   }
   #__marionetaPanel .m_toggle:hover { color: #e2e8f0; }
+  #__marionetaPanel input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 13px;
+    height: 13px;
+    max-width: 13px;
+    flex-shrink: 0;
+    border: 1px solid #475569;
+    border-radius: 3px;
+    background: #1e293b;
+    cursor: pointer;
+    position: relative;
+    margin: 0;
+  }
+  #__marionetaPanel input[type="checkbox"]:checked {
+    background: #3b82f6;
+    border-color: #3b82f6;
+  }
+  #__marionetaPanel input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 1px;
+    width: 5px;
+    height: 8px;
+    border: 2px solid #fff;
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg);
+  }
 </style>
 
 <div id="__marionetaPanel" style="display:flex;flex-direction:column;gap:0">
@@ -203,6 +234,7 @@ function marionetaBoot() {
     const positionSel = panel.querySelector("#m_position")
     const tree = panel.querySelector("#m_tree")
     const deleteBtn = panel.querySelector("#m_delete")
+    const generateBtn = panel.querySelector("#m_generate")
     const statusDot = panel.querySelector("#m_status")
     const header = panel.querySelector("#m_header")
     const toggleBtn = panel.querySelector("#m_toggle")
@@ -286,29 +318,45 @@ function marionetaBoot() {
       renderTree()
     }
 
+    // Sincroniza el estado del botón 🚀 según los cases seleccionados
+    function updateGenerateBtn() {
+      const enabled = selectedCases.size > 0
+      generateBtn.disabled = !enabled
+      generateBtn.style.opacity = enabled ? "1" : "0.35"
+      generateBtn.style.cursor = enabled ? "pointer" : "not-allowed"
+    }
+
     // Renderiza el árbol de cases y steps debajo del 🚀
     function renderTree() {
       const caseNames = Object.keys(cases)
-      if (!caseNames.length) { tree.innerHTML = ""; return }
+      if (!caseNames.length) { tree.innerHTML = ""; updateGenerateBtn(); return }
+
+      // Casos nuevos quedan marcados por defecto
+      caseNames.forEach(cn => { if (!selectedCases.has(cn)) selectedCases.add(cn) })
 
       tree.innerHTML = caseNames.map(cn => {
         const steps = cases[cn] || []
+        const checked = selectedCases.has(cn)
         const stepsHtml = steps.map((s, i) => {
           const isEditing = editingCase === cn && editingIndex === i
-          const label = `${s.action} → ${s.selector.slice(0, 28)}${s.selector.length > 28 ? "…" : ""}`
+          const isGoto = s.action === "goto"
+          const label = isGoto
+            ? `goto → ${s.selector.replace(/^https?:\/\//, "").slice(0, 28)}…`
+            : `${s.action} → ${s.selector.slice(0, 28)}${s.selector.length > 28 ? "…" : ""}`
           return `<div data-case="${safe(cn)}" data-idx="${i}" class="m_step"
             style="padding:3px 6px;margin:2px 0;cursor:pointer;border-radius:4px;font-size:10px;
             background:${isEditing ? "#1e3a5f" : "transparent"};
-            border:1px solid ${isEditing ? "#3b82f6" : "#1e293b"};
-            color:${isEditing ? "#93c5fd" : "#94a3b8"};
+            border:1px solid ${isEditing ? "#3b82f6" : isGoto ? "#312e81" : "#1e293b"};
+            color:${isEditing ? "#93c5fd" : isGoto ? "#818cf8" : "#94a3b8"};
             transition:background .1s">
-            <span style="color:${isEditing ? "#60a5fa" : "#475569"};margin-right:4px">${i + 1}.</span>${safe(label)}
+            <span style="color:${isEditing ? "#60a5fa" : isGoto ? "#6366f1" : "#475569"};margin-right:4px">${i + 1}.</span>${safe(label)}
           </div>`
         }).join("")
 
         return `<div style="margin-bottom:8px">
-          <div style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;padding-left:2px;display:flex;align-items:center;gap:5px">
-            <span style="flex:1">${safe(cn)}</span>
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;padding-left:2px">
+            <input type="checkbox" data-check-case="${safe(cn)}" ${checked ? "checked" : ""}>
+            <span style="flex:1;color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em">${safe(cn)}</span>
             <span style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:0 5px;font-size:9px;color:#64748b">${steps.length}</span>
             <button data-run-case="${safe(cn)}" title="Ejecutar test"
               style="background:none;border:none;cursor:pointer;color:#22c55e;padding:0;font-size:11px;line-height:1">▶</button>
@@ -316,6 +364,14 @@ function marionetaBoot() {
           ${stepsHtml}
         </div>`
       }).join("")
+
+      tree.querySelectorAll("[data-check-case]").forEach(chk => {
+        chk.onchange = () => {
+          if (chk.checked) selectedCases.add(chk.dataset.checkCase)
+          else selectedCases.delete(chk.dataset.checkCase)
+          updateGenerateBtn()
+        }
+      })
 
       tree.querySelectorAll(".m_step").forEach(el => {
         el.onmouseenter = () => { if (editingCase !== el.dataset.case || editingIndex !== +el.dataset.idx) el.style.background = "#1e293b" }
@@ -337,9 +393,11 @@ function marionetaBoot() {
           const data = res ? await res.json().catch(() => ({})) : {}
           btn.textContent = data.ok ? "✅" : "❌"
           btn.style.pointerEvents = ""
-          setTimeout(() => { btn.textContent = "▶"; }, 3000)
+          setTimeout(() => { btn.textContent = "▶" }, 3000)
         }
       })
+
+      updateGenerateBtn()
     }
 
     // Carga un step en el panel para editar
@@ -474,8 +532,11 @@ function marionetaBoot() {
       resetPanel()
     }
 
-    panel.querySelector("#m_generate").onclick = () => {
-      window.__marionetaGenerate(cases)
+    generateBtn.onclick = () => {
+      const payload = Object.fromEntries(
+        Object.entries(cases).filter(([cn]) => selectedCases.has(cn))
+      )
+      window.__marionetaGenerate({ url: location.href, cases: payload })
     }
 
     // Elimina el step que se está editando
@@ -662,15 +723,9 @@ export async function inject(page) {
   })
 
   // Emite cuando el usuario presiona 🚀 generar
-  await page.exposeFunction("__marionetaGenerate", async cases => {
+  await page.exposeFunction("__marionetaGenerate", async ({ url, cases }) => {
     console.log("GENERATING FROM →", cases)
-
-    generate({
-      url: page.url(),
-      cases
-    })
-    .then()
-    .catch()
+    generate({ url, cases }).then().catch()
   })
 
   await page.addInitScript(() => {
