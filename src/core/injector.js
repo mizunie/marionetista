@@ -173,12 +173,42 @@ function marionetaBoot() {
     <select id="m_position"><option value="end">end</option></select>
   </div>
 
-  <!-- Botones -->
-  <div class="m_row" style="margin-top:10px">
-    <button id="m_ok"       class="m_btn primary" title="Guardar step">✅</button>
-    <button id="m_cancel"   class="m_btn"         title="Cancelar">❌</button>
-    <button id="m_delete"   class="m_btn danger"  title="Eliminar step" style="display:none">🗑️</button>
-    <button id="m_generate" class="m_btn"         title="Generar tests" style="margin-left:auto">🚀</button>
+  <!-- Framework + Generar -->
+  <div class="m_field">
+    <label>Framework</label>
+    <select id="m_framework">
+      <optgroup label="Playwright">
+        <option value="playwright-pom">Playwright — POM</option>
+        <option value="playwright-cucumber">Playwright — Cucumber BDD</option>
+        <option value="playwright-screenplay">Playwright — Screenplay (Serenity/JS)</option>
+      </optgroup>
+      <optgroup label="Selenium">
+        <option value="selenium-pom-js">Selenium JS — POM</option>
+        <option value="selenium-pom-java">Selenium Java — POM</option>
+        <option value="selenium-cucumber-js">Selenium JS — Cucumber BDD</option>
+        <option value="selenium-cucumber-java">Selenium Java — Cucumber BDD</option>
+        <option value="selenium-screenplay-java">Selenium Java — Screenplay (Serenity)</option>
+        <option value="selenide-pom">Selenide — POM</option>
+        <option value="selenide-screenplay">Selenide — Screenplay</option>
+      </optgroup>
+      <optgroup label="Cypress">
+        <option value="cypress-pom">Cypress — POM</option>
+        <option value="cypress-cucumber">Cypress — Cucumber BDD</option>
+      </optgroup>
+      <optgroup label="WebdriverIO">
+        <option value="webdriverio-pom">WebdriverIO — POM</option>
+        <option value="webdriverio-cucumber">WebdriverIO — Cucumber BDD</option>
+        <option value="webdriverio-screenplay">WebdriverIO — Screenplay (Serenity/JS)</option>
+      </optgroup>
+    </select>
+  </div>
+
+  <!-- Botones de acción -->
+  <div class="m_row" style="margin-top:8px">
+    <button id="m_ok"     class="m_btn primary" title="Guardar step">✅</button>
+    <button id="m_cancel" class="m_btn"         title="Cancelar">❌</button>
+    <button id="m_delete" class="m_btn danger"  title="Eliminar step" style="display:none">🗑</button>
+    <button id="m_generate" class="m_btn" title="Generar tests" style="margin-left:auto">🚀</button>
   </div>
 
   <hr class="m_divider">
@@ -386,17 +416,19 @@ function marionetaBoot() {
         btn.onclick = async e => {
           e.stopPropagation()
           const cn = btn.dataset.runCase
+          const framework = panel.querySelector("#m_framework").value
           btn.textContent = "⏳"
           btn.style.pointerEvents = "none"
           const res = await fetch("http://localhost:7331/run", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url: location.href, caseName: cn })
+            body: JSON.stringify({ url: location.href, caseName: cn, framework })
           }).catch(() => null)
           const data = res ? await res.json().catch(() => ({})) : {}
           btn.textContent = data.ok ? "✅" : "❌"
           btn.style.pointerEvents = ""
           setTimeout(() => { btn.textContent = "▶" }, 3000)
+          if (data.reportUrl) window.open(data.reportUrl, "_blank")
         }
       })
 
@@ -535,11 +567,17 @@ function marionetaBoot() {
       resetPanel()
     }
 
-    generateBtn.onclick = () => {
+    generateBtn.onclick = async () => {
       const payload = Object.fromEntries(
         Object.entries(cases).filter(([cn]) => selectedCases.has(cn))
       )
-      window.__marionetaGenerate({ url: location.href, cases: payload })
+      const framework = panel.querySelector("#m_framework").value
+      generateBtn.textContent = "⏳"
+      generateBtn.disabled = true
+      await window.__marionetaGenerate({ url: location.href, framework, cases: payload })
+      generateBtn.textContent = "🚀"
+      generateBtn.disabled = false
+      updateGenerateBtn()
     }
 
     // Elimina el step que se está editando
@@ -587,7 +625,7 @@ function marionetaBoot() {
       const data = { selector: frozen, action }
 
       panel.querySelectorAll("input,select,textarea").forEach(el => {
-        if (el.id.startsWith("m_") && !["m_action","m_case","m_position"].includes(el.id)) data[el.id] = el.value
+        if (el.id.startsWith("m_") && !["m_action","m_case","m_position","m_framework"].includes(el.id)) data[el.id] = el.value
       })
 
       const posValue = positionSel.value
@@ -729,9 +767,9 @@ export async function inject(page) {
   })
 
   // Emite cuando el usuario presiona 🚀 generar
-  await page.exposeFunction("__marionetaGenerate", async ({ url, cases }) => {
-    console.log("GENERATING FROM →", cases)
-    generate({ url, cases }).then().catch()
+  await page.exposeFunction("__marionetaGenerate", async ({ url, framework, cases }) => {
+    console.log("GENERATING FROM →", framework, cases)
+    await generate({ url, framework, cases }).then().catch()
   })
 
   await page.addInitScript(() => {

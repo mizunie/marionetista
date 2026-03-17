@@ -6,8 +6,51 @@ function hostNameFolder(url) {
   return new URL(url).hostname.replaceAll(".", "_")
 }
 
-export function saveFilesFromContent(url, content) {
-  const baseDir = path.join(process.cwd(), "generated", hostNameFolder(url))
+// Mapea framework → subcarpeta dentro del baseDir
+const FRAMEWORK_SUBDIR = {
+  "playwright-pom":        "playwright",
+  "playwright-cucumber":   "playwright",
+  "playwright-screenplay": "playwright",
+}
+
+// Carpetas base a copiar si el directorio no existe aún
+const FRAMEWORK_BASE = {
+  "playwright": path.join(process.cwd(), "src", "base", "playwright"),
+}
+
+function copyDirRecursive(src, dest) {
+  fs.mkdirSync(dest, { recursive: true })
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath  = path.join(src, entry.name)
+    const destPath = path.join(dest, entry.name)
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath)
+    } else {
+      fs.copyFileSync(srcPath, destPath)
+    }
+  }
+}
+
+function resolveBaseDir(url, framework) {
+  const host   = hostNameFolder(url)
+  const subdir = FRAMEWORK_SUBDIR[framework]
+  const base   = path.join(process.cwd(), "generated", host)
+
+  if (!subdir) return base  // framework sin subcarpeta definida, va directo
+
+  const dir = path.join(base, subdir)
+
+  // Si no existe aún, copiar el template base
+  if (!fs.existsSync(dir) && FRAMEWORK_BASE[subdir]) {
+    console.log(`📁 Inicializando template ${subdir} en`, dir)
+    copyDirRecursive(FRAMEWORK_BASE[subdir], dir)
+  }
+
+  return dir
+}
+
+export function saveFilesFromContent(url, framework, content) {
+  const baseDir = resolveBaseDir(url, framework)
 
   const fileRegex = /# file:(.+?)\n([\s\S]*?)# file:endfile/g
 
@@ -18,7 +61,6 @@ export function saveFilesFromContent(url, content) {
     const relativePath = match[1].trim()
     const raw = match[2]
 
-    // Limpieza fuerte del output IA
     const fileContent = raw
       .replace(/^\n+/, "")
       .replace(/\n+$/, "")
@@ -57,6 +99,6 @@ export async function generate(payload) {
 
   const result = await res.json()
 
-  saveFilesFromContent(payload.url, result)
+  saveFilesFromContent(payload.url, payload.framework, result)
   return true
 }

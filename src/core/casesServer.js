@@ -5,8 +5,18 @@ import { execSync } from "child_process"
 
 const PORT = 7331
 
-function hostFolder(url) {
-  return new URL(url).hostname.replaceAll(".", "_")
+// Mismo mapeo que generate.js
+const FRAMEWORK_SUBDIR = {
+  "playwright-pom":        "playwright",
+  "playwright-cucumber":   "playwright",
+  "playwright-screenplay": "playwright",
+}
+
+function resolveProjectDir(url, framework) {
+  const host = new URL(url).hostname.replaceAll(".", "_")
+  const base = path.join(process.cwd(), "generated", host)
+  const subdir = FRAMEWORK_SUBDIR[framework]
+  return subdir ? path.join(base, subdir) : base
 }
 
 function caseFilePath(url, caseName) {
@@ -70,12 +80,11 @@ export function startCasesServer() {
 
     const reqUrl = new URL(req.url, `http://localhost:${PORT}`)
 
-    // POST /run  { url, caseName }
+    // POST /run  { url, caseName, framework }
     if (req.method === "POST" && reqUrl.pathname === "/run") {
       try {
-        const { url, caseName } = await readBody(req)
-        const host = new URL(url).hostname.replaceAll(".", "_")
-        const dir = path.join(process.cwd(), "generated", host)
+        const { url, caseName, framework } = await readBody(req)
+        const dir = resolveProjectDir(url, framework)
 
         if (!fs.existsSync(dir)) {
           res.writeHead(404)
@@ -89,15 +98,22 @@ export function startCasesServer() {
         }
 
         console.log(`▶️  Ejecutando case "${caseName}"`)
+        let ok = true
         try {
           execSync(`pnpm playwright test --grep "${caseName}"`, { cwd: dir, stdio: "inherit" })
-          res.writeHead(200, { "Content-Type": "application/json" })
-          res.end(JSON.stringify({ ok: true }))
         } catch {
-          // playwright devuelve exit code != 0 si hay fallos, pero el output ya se imprimió
-          res.writeHead(200, { "Content-Type": "application/json" })
-          res.end(JSON.stringify({ ok: false, msg: "Test finalizado con fallos, revisa la consola" }))
+          ok = false
         }
+
+        // Abre el reporte en el browser si existe
+        const reportIndex = path.join(dir, "playwright-report", "index.html")
+        const reportUrl = fs.existsSync(reportIndex)
+          ? `http://localhost:${PORT}/report?url=${encodeURIComponent(url)}&framework=${encodeURIComponent(framework)}`
+          : null
+        if (reportUrl) console.log("📊 Reporte →", reportUrl)
+
+        res.writeHead(200, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ ok, reportUrl, ...(!ok && { msg: "Test finalizado con fallos, revisa la consola" }) }))
       } catch (e) {
         res.writeHead(400)
         res.end(e.message)
@@ -144,6 +160,35 @@ export function startCasesServer() {
       const cases = loadCases(url)
       res.writeHead(200, { "Content-Type": "application/json" })
       res.end(JSON.stringify(cases))
+      return
+    }
+
+    // GET /report?url=...&framework=...  — sirve playwright-report como estático
+    if (req.method === "GET" && reqUrl.pathname.startsWith("/report")) {
+      const pageUrl   = reqUrl.searchParams.get("url")
+      const framework = reqUrl.searchParams.get("framework")
+      if (!pageUrl || !framework) { res.writeHead(400); return res.end("missing params") }
+
+      const dir        = resolveProjectDir(pageUrl, framework)
+      const reportDir  = path.join(dir, "playwright-report")
+      // El sub-path dentro del reporte (ej: /report/data/xxx.zip → data/xxx.zip)
+      const subPath    = reqUrl.pathname.replace(/^\/report\/?/, "") || "index.html"
+      const filePath   = path.join(reportDir, subPath)
+
+      if (!fs.existsSync(filePath) || !filePath.startsWith(reportDir)) {
+        res.writeHead(404); return res.end("not found")
+      }
+
+      const ext = path.extname(filePath).toLowerCase()
+      const mime = {
+        ".html": "text/html", ".js": "application/javascript",
+        ".css": "text/css",   ".json": "application/json",
+        ".png": "image/png",  ".svg": "image/svg+xml",
+        ".zip": "application/zip", ".webm": "video/webm"
+      }[ext] || "application/octet-stream"
+
+      res.writeHead(200, { "Content-Type": mime })
+      fs.createReadStream(filePath).pipe(res)
       return
     }
 
