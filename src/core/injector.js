@@ -340,9 +340,12 @@ function marionetaBoot() {
         const stepsHtml = steps.map((s, i) => {
           const isEditing = editingCase === cn && editingIndex === i
           const isGoto = s.action === "goto"
+          const selDisplay = typeof s.selector === "object"
+            ? `${s.selector.attr}="${s.selector.value}"`
+            : s.selector
           const label = isGoto
-            ? `goto → ${s.selector.replace(/^https?:\/\//, "").slice(0, 28)}…`
-            : `${s.action} → ${s.selector.slice(0, 28)}${s.selector.length > 28 ? "…" : ""}`
+            ? `goto → ${(s.selector?.value ?? s.selector).replace(/^https?:\/\//, "").slice(0, 28)}…`
+            : `${s.action} → ${selDisplay.slice(0, 28)}${selDisplay.length > 28 ? "…" : ""}`
           return `<div data-case="${safe(cn)}" data-idx="${i}" class="m_step"
             style="padding:3px 6px;margin:2px 0;cursor:pointer;border-radius:4px;font-size:10px;
             background:${isEditing ? "#1e3a5f" : "transparent"};
@@ -409,7 +412,7 @@ function marionetaBoot() {
       editingIndex = idx
 
       caseInput.value = cn
-      frozen = step.selector
+      frozen = step.selector  // objeto { type, value, role? }
 
       // Selecciona la acción
       actionSel.value = step.action
@@ -584,7 +587,7 @@ function marionetaBoot() {
       const data = { selector: frozen, action }
 
       panel.querySelectorAll("input,select,textarea").forEach(el => {
-        if (el.id.startsWith("m_")) data[el.id] = el.value
+        if (el.id.startsWith("m_") && !["m_action","m_case","m_position"].includes(el.id)) data[el.id] = el.value
       })
 
       const posValue = positionSel.value
@@ -651,19 +654,25 @@ function marionetaBoot() {
         text: (el.innerText || "").trim().slice(0, 80)
       }
 
-      const { selector, weak } = buildSelector(el)
+      const { attr, value, name: roleName, weak } = buildSelector(el)
       if (editingIndex === null) {
-        frozen = selector
+        frozen = { attr, value, ...(roleName ? { name: roleName } : {}) }
         updateStatus()
       }
 
-      // Color del bloque selector según estado y calidad
       const selectorBg     = editingIndex !== null ? "#0f1e3a" : weak ? "#1a1200" : "#0f2a1a"
       const selectorBorder = editingIndex !== null ? "#3b82f6" : weak ? "#f59e0b" : "#22c55e"
       const selectorColor  = editingIndex !== null ? "#93c5fd" : weak ? "#fbbf24" : "#4ade80"
       const warningHtml    = weak && editingIndex === null
         ? `<div style="color:#f59e0b;font-size:9px;margin-top:3px">⚠️ Selector genérico, puede ser frágil</div>`
         : ""
+
+      const frozenDisplay = frozen
+        ? frozen.name ? `${frozen.attr}="${frozen.value}" name="${frozen.name}"` : `${frozen.attr}="${frozen.value}"`
+        : ""
+      const displaySelector = editingIndex !== null
+        ? frozenDisplay
+        : roleName ? `${attr}="${value}" name="${roleName}"` : `${attr}="${value}"`
 
       info.innerHTML = `
 <div style="display:grid;grid-template-columns:auto 1fr;gap:1px 6px">
@@ -672,7 +681,7 @@ function marionetaBoot() {
   ${meta.placeholder !== "-" ? `<span style="color:#475569">placeholder</span><span style="color:#94a3b8">${safe(meta.placeholder)}</span>` : ""}
   <span style="color:#475569">text</span><span style="color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${safe(meta.text)}"</span>
 </div>
-<div style="margin-top:5px;padding:4px 6px;background:${selectorBg};border-radius:4px;border-left:2px solid ${selectorBorder};color:${selectorColor};word-break:break-all">${editingIndex !== null ? frozen : selector}</div>
+<div style="margin-top:5px;padding:4px 6px;background:${selectorBg};border-radius:4px;border-left:2px solid ${selectorBorder};color:${selectorColor};word-break:break-all">${safe(displaySelector)}</div>
 ${warningHtml}
 `
     })
@@ -682,33 +691,30 @@ ${warningHtml}
     panel.__refreshPosition = refreshPositionSelect
   }
 
-  // Heurística de selector optimizada para Playwright
+  // Heurística de selector — guarda el atributo exacto y valor para que el back
+  // genere la sintaxis correcta para cualquier framework
   function buildSelector(el) {
-    const t = el.getAttribute("data-testid")
-    if (t) return { selector: `page.getByTestId("${t}")`, weak: false }
+    const testid = el.getAttribute("data-testid")
+    if (testid) return { attr: "data-testid", value: testid, weak: false }
 
-    const d = el.getAttribute("data-test")
-    if (d) return { selector: `page.locator('[data-test="${d}"]')`, weak: false }
+    const datatest = el.getAttribute("data-test")
+    if (datatest) return { attr: "data-test", value: datatest, weak: false }
 
-    if (el.id) return { selector: `page.locator("#${el.id}")`, weak: false }
+    if (el.id) return { attr: "id", value: el.id, weak: false }
 
     const role = el.getAttribute("role")
     const text = (el.innerText || "").trim()
+    if (role && text) return { attr: "role", value: role, name: text, weak: false }
+
     const aria = el.getAttribute("aria-label")
+    if (aria) return { attr: "aria-label", value: aria, weak: false }
+
     const placeholder = el.getAttribute("placeholder")
+    if (placeholder) return { attr: "placeholder", value: placeholder, weak: false }
 
-    if (role && text)
-      return { selector: `page.getByRole("${role}", { name: "${text}" })`, weak: false }
+    if (text) return { attr: "text", value: text, weak: false }
 
-    if (aria)
-      return { selector: `page.getByLabel("${aria}")`, weak: false }
-
-    if (placeholder)
-      return { selector: `page.getByPlaceholder("${placeholder}")`, weak: false }
-
-    if (text) return { selector: `page.getByText("${text}")`, weak: false }
-
-    return { selector: `page.locator("${el.tagName.toLowerCase()}")`, weak: true }
+    return { attr: "tag", value: el.tagName.toLowerCase(), weak: true }
   }
 
   // Espera a que el body exista antes de montar Marioneta
