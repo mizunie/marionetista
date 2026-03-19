@@ -456,6 +456,9 @@ function marionetaBoot() {
           el.value = step[el.id]
         }
       })
+      // Restaura el check de secreto si aplica
+      const secretChk = panel.querySelector("#m_secret")
+      if (secretChk) secretChk.checked = !!step.m_secret
 
       // Actualiza el select de posición mostrando dónde está y opciones de mover
       updatePositionSelect(cn, idx)
@@ -535,7 +538,12 @@ function marionetaBoot() {
       else if (a === "fill" || a === "clickfill") opts.innerHTML = `
 <div class="m_field">
   <label>Valor</label>
-  <input id="m_value" placeholder="value">
+  <div class="m_row" style="margin-top:3px">
+    <input id="m_value" placeholder="value" style="margin-top:0">
+    <label title="Valor sensible (contraseña, token...)" style="display:flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;text-transform:none;letter-spacing:0;color:#64748b;font-size:10px">
+      <input type="checkbox" id="m_secret" style="margin-top:0">🔒
+    </label>
+  </div>
 </div>`
 
       else if (a === "if") opts.innerHTML = `
@@ -625,8 +633,21 @@ function marionetaBoot() {
       const data = { selector: frozen, action }
 
       panel.querySelectorAll("input,select,textarea").forEach(el => {
-        if (el.id.startsWith("m_") && !["m_action","m_case","m_position","m_framework"].includes(el.id)) data[el.id] = el.value
+        if (el.id.startsWith("m_") && !["m_action","m_case","m_position","m_framework","m_secret"].includes(el.id)) data[el.id] = el.value
       })
+
+      // Si el valor es sensible, tokenizarlo antes de guardar
+      const secretChk = panel.querySelector("#m_secret")
+      if (secretChk?.checked && data.m_value) {
+        const token = `__SECRET_${Date.now()}__`
+        await fetch("http://localhost:7331/secrets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, value: data.m_value })
+        }).catch(() => {})
+        data.m_value = token
+        data.m_secret = true
+      }
 
       const posValue = positionSel.value
 

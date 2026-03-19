@@ -99,6 +99,15 @@ export async function generate(payload) {
 
   const result = await res.json()
 
+  // Reemplaza tokens secretos por valores reales antes de escribir al disco
+  try {
+    const secretsRes = await fetch("http://localhost:7331/secrets")
+    const secrets = await secretsRes.json()
+    for (const [token, value] of Object.entries(secrets)) {
+      result.msg = result.msg.replaceAll(token, value)
+    }
+  } catch {}
+
   saveFilesFromContent(payload.url, payload.framework, result)
   return true
 }

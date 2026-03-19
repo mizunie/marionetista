@@ -4,6 +4,17 @@ import path from "path"
 import { execSync } from "child_process"
 
 const PORT = 7331
+const SECRETS_FILE = path.join(process.cwd(), ".secrets.json")
+
+function loadSecrets() {
+  try { return JSON.parse(fs.readFileSync(SECRETS_FILE, "utf8")) } catch { return {} }
+}
+
+function saveSecret(token, value) {
+  const secrets = loadSecrets()
+  secrets[token] = value
+  fs.writeFileSync(SECRETS_FILE, JSON.stringify(secrets, null, 2), "utf8")
+}
 
 // Mismo mapeo que generate.js
 const FRAMEWORK_SUBDIR = {
@@ -160,6 +171,26 @@ export function startCasesServer() {
       const cases = loadCases(url)
       res.writeHead(200, { "Content-Type": "application/json" })
       res.end(JSON.stringify(cases))
+      return
+    }
+
+    // POST /secrets  { token, value }
+    if (req.method === "POST" && reqUrl.pathname === "/secrets") {
+      try {
+        const { token, value } = await readBody(req)
+        saveSecret(token, value)
+        res.writeHead(200, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ ok: true }))
+      } catch (e) {
+        res.writeHead(400); res.end(e.message)
+      }
+      return
+    }
+
+    // GET /secrets
+    if (req.method === "GET" && reqUrl.pathname === "/secrets") {
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(JSON.stringify(loadSecrets()))
       return
     }
 
