@@ -132,7 +132,7 @@ function marionetaBoot() {
   <!-- Header -->
   <div id="m_header" style="display:flex;align-items:center;gap:6px;padding-bottom:8px;border-bottom:1px solid #1e293b;margin-bottom:8px;cursor:grab;user-select:none">
     <span style="font-size:15px">🧪</span>
-    <span style="font-weight:700;font-size:13px;color:#f1f5f9;letter-spacing:.03em;flex:1">Marioneta</span>
+    <span style="font-weight:700;font-size:13px;color:#f1f5f9;letter-spacing:.03em;flex:1" title="Ctrl: freeze inspector · Shift: minimizar">Marioneta <span style="font-weight:400;font-size:9px;color:#475569">Ctrl · Shift</span></span>
     <span id="m_status" title="Estado" style="width:8px;height:8px;border-radius:50%;background:#475569;flex-shrink:0;transition:background .2s"></span>
     <button id="m_toggle" class="m_toggle" title="Colapsar">◀</button>
   </div>
@@ -565,9 +565,21 @@ function marionetaBoot() {
     actionSel.onchange = renderOpts
     caseInput.oninput = refreshPositionSelect
 
-    // Tecla Pause congela o libera el inspector
+    // Ctrl solo (sin combinación) → freeze/unfreeze inspector
+    // Shift solo → colapsar/expandir panel
+    let ctrlAlone = false
+    let shiftAlone = false
     document.addEventListener("keydown", e => {
-      if (e.code === "Pause") paused = !paused
+      if (e.key === "Control") ctrlAlone = true
+      else ctrlAlone = false
+      if (e.key === "Shift") shiftAlone = true
+      else shiftAlone = false
+    })
+    document.addEventListener("keyup", e => {
+      if (e.key === "Control" && ctrlAlone) paused = !paused
+      if (e.key === "Shift" && shiftAlone) toggleBtn.click()
+      ctrlAlone = false
+      shiftAlone = false
     })
 
     // Cancela edición o limpia selector

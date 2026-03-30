@@ -6,7 +6,7 @@ Grabador visual de tests E2E. Abre cualquier web, apunta con el mouse, define lo
 
 1. Lanzas Marioneta apuntando a una URL
 2. Un panel flotante aparece sobre la página
-3. Haces hover sobre los elementos — el inspector los resalta y construye el selector automáticamente. Puedes congelar el elemento resaltado con la tecla `Pause`
+3. Haces hover sobre los elementos — el inspector los resalta y construye el selector automáticamente. Puedes congelar el elemento resaltado con `Ctrl` (solo, sin combinación)
 4. Eliges la acción (click, fill, assert, hover...), el case al que pertenece y guardas el paso con ✅
 5. Los pasos se persisten en disco en `generated/<host>/cases/<path>/<case>.json`
 6. Cuando tienes el flujo completo, marcas los cases que quieres generar y pulsas 🚀 — la IA genera el código completo en `generated/<host>/playwright/`
@@ -52,7 +52,7 @@ pnpm dev https://tuapp.com
 | Framework | Framework de destino para la generación |
 | 🚀 | Envía los cases seleccionados a la IA para generar el código |
 | ▶ | Ejecuta el test de ese case y abre el reporte al terminar |
-| ◀ / ▶ | Colapsa o expande el panel (desactiva el inspector al colapsar) |
+| ◀ / ▶ | Colapsa o expande el panel — también con `Shift` (desactiva el inspector al colapsar) |
 
 El header es arrastrable. Al colapsar, el inspector visual se apaga para navegar sin distracciones.
 

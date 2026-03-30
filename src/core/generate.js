@@ -82,7 +82,7 @@ export function saveFilesFromContent(url, framework, content) {
 }
 
 export async function generate(payload) {
-  const res = await fetch(process.env.MARIONETISTA_URL, {
+  const envia = {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -90,7 +90,8 @@ export async function generate(payload) {
       "bananin-llave": process.env.BANANIN_KEY
     },
     body: JSON.stringify(payload)
-  })
+  }
+  const res = await fetch(process.env.MARIONETISTA_URL, envia)
 
   if (!res.ok) {
     console.log(await res.text())
