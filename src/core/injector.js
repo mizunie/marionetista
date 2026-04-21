@@ -187,9 +187,12 @@ function marionetaBoot() {
         <option value="selenium-pom-java">Selenium Java — POM</option>
         <option value="selenium-cucumber-js">Selenium JS — Cucumber BDD</option>
         <option value="selenium-cucumber-java">Selenium Java — Cucumber BDD</option>
-        <option value="selenium-screenplay-java">Selenium Java — Screenplay (Serenity)</option>
+        <option value="selenium-screenplay-java">Selenium Java — Screenplay (Serenity BDD)</option>
         <option value="selenide-pom">Selenide — POM</option>
         <option value="selenide-screenplay">Selenide — Screenplay</option>
+      </optgroup>
+      <optgroup label="Serenity BDD">
+        <option value="serenity-pom-java">Serenity BDD — POM (Java + JUnit)</option>
       </optgroup>
       <optgroup label="Cypress">
         <option value="cypress-pom">Cypress — POM</option>
@@ -251,7 +254,7 @@ function marionetaBoot() {
           panel.__refreshPosition?.()
         }
       })
-      .catch(() => {})
+      .catch(() => { })
 
     return true
   }
@@ -339,7 +342,7 @@ function marionetaBoot() {
       frozen = null
       editingCase = null
       editingIndex = null
-      caseInput.value = ""
+      // caseInput.value = ""
       actionSel.value = "click"
       deleteBtn.style.display = "none"
       updateStatus()
@@ -415,7 +418,7 @@ function marionetaBoot() {
       tree.querySelectorAll("[data-run-case]").forEach(btn => {
         btn.onclick = async e => {
           e.stopPropagation()
-          const cn = btn.dataset.runCase
+          const cn = btn.dataset.runCase.toLowerCase().replace(/\s+/g, "_")
           const framework = panel.querySelector("#m_framework").value
           btn.textContent = "⏳"
           btn.style.pointerEvents = "none"
@@ -613,13 +616,13 @@ function marionetaBoot() {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: location.href, caseName: cn })
-        }).catch(() => {})
+        }).catch(() => { })
       } else {
         await fetch("http://localhost:7331/cases", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: location.href, caseName: cn, steps: cases[cn] })
-        }).catch(() => {})
+        }).catch(() => { })
       }
       resetPanel()
     }
@@ -645,7 +648,7 @@ function marionetaBoot() {
       const data = { selector: frozen, action }
 
       panel.querySelectorAll("input,select,textarea").forEach(el => {
-        if (el.id.startsWith("m_") && !["m_action","m_case","m_position","m_framework","m_secret"].includes(el.id)) data[el.id] = el.value
+        if (el.id.startsWith("m_") && !["m_action", "m_case", "m_position", "m_framework", "m_secret"].includes(el.id)) data[el.id] = el.value
       })
 
       // Si el valor es sensible, tokenizarlo antes de guardar
@@ -656,7 +659,7 @@ function marionetaBoot() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token, value: data.m_value })
-        }).catch(() => {})
+        }).catch(() => { })
         data.m_value = token
         data.m_secret = true
       }
@@ -688,7 +691,7 @@ function marionetaBoot() {
           caseName: currentCase,
           steps: cases[currentCase]
         })
-      }).catch(() => {})
+      }).catch(() => { })
 
       resetPanel()
     }
@@ -710,7 +713,7 @@ function marionetaBoot() {
       overlay.style.width = r.width + "px"
       overlay.style.height = r.height + "px"
       overlay.style.borderColor = editingIndex !== null ? "#3b82f6" : "#22c55e"
-      overlay.style.background   = editingIndex !== null ? "rgba(59,130,246,.1)" : "rgba(34,197,94,.15)"
+      overlay.style.background = editingIndex !== null ? "rgba(59,130,246,.1)" : "rgba(34,197,94,.15)"
 
       const meta = {
         tag: el.tagName.toLowerCase(),
@@ -731,10 +734,10 @@ function marionetaBoot() {
         updateStatus()
       }
 
-      const selectorBg     = editingIndex !== null ? "#0f1e3a" : weak ? "#1a1200" : "#0f2a1a"
+      const selectorBg = editingIndex !== null ? "#0f1e3a" : weak ? "#1a1200" : "#0f2a1a"
       const selectorBorder = editingIndex !== null ? "#3b82f6" : weak ? "#f59e0b" : "#22c55e"
-      const selectorColor  = editingIndex !== null ? "#93c5fd" : weak ? "#fbbf24" : "#4ade80"
-      const warningHtml    = weak && editingIndex === null
+      const selectorColor = editingIndex !== null ? "#93c5fd" : weak ? "#fbbf24" : "#4ade80"
+      const warningHtml = weak && editingIndex === null
         ? `<div style="color:#f59e0b;font-size:9px;margin-top:3px">⚠️ Selector genérico, puede ser frágil</div>`
         : ""
 
@@ -747,7 +750,7 @@ function marionetaBoot() {
 
       info.innerHTML = `
 <div style="display:grid;grid-template-columns:auto 1fr;gap:1px 6px">
-  <span style="color:#475569">&lt;${meta.tag}&gt;</span><span style="color:#94a3b8">${safe(meta.id !== "-" ? "#"+meta.id : meta.testid !== "-" ? meta.testid : meta.name !== "-" ? meta.name : "")}</span>
+  <span style="color:#475569">&lt;${meta.tag}&gt;</span><span style="color:#94a3b8">${safe(meta.id !== "-" ? "#" + meta.id : meta.testid !== "-" ? meta.testid : meta.name !== "-" ? meta.name : "")}</span>
   ${meta.aria !== "-" ? `<span style="color:#475569">aria</span><span style="color:#94a3b8">${safe(meta.aria)}</span>` : ""}
   ${meta.placeholder !== "-" ? `<span style="color:#475569">placeholder</span><span style="color:#94a3b8">${safe(meta.placeholder)}</span>` : ""}
   <span style="color:#475569">text</span><span style="color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${safe(meta.text)}"</span>
@@ -783,6 +786,9 @@ ${warningHtml}
     const placeholder = el.getAttribute("placeholder")
     if (placeholder) return { attr: "placeholder", value: placeholder, weak: false }
 
+    const name = el.getAttribute("name")
+    if (name) return { attr: "name", value: name, weak: false }
+
     if (text) return { attr: "text", value: text, weak: false }
 
     return { attr: "tag", value: el.tagName.toLowerCase(), weak: true }
@@ -806,7 +812,7 @@ export async function inject(page) {
   })
 
   await page.addInitScript(() => {
-    window.__marionetaEmit = window.__marionetaEmit || (() => {})
+    window.__marionetaEmit = window.__marionetaEmit || (() => { })
   })
 
   await page.addInitScript(marionetaBoot)

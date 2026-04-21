@@ -8,20 +8,22 @@ function hostNameFolder(url) {
 
 // Mapea framework → subcarpeta dentro del baseDir
 const FRAMEWORK_SUBDIR = {
-  "playwright-pom":        "playwright",
-  "playwright-cucumber":   "playwright",
+  "playwright-pom": "playwright",
+  "playwright-cucumber": "playwright",
   "playwright-screenplay": "playwright",
+  "serenity-pom-java": "serenity",
 }
 
 // Carpetas base a copiar si el directorio no existe aún
 const FRAMEWORK_BASE = {
   "playwright": path.join(process.cwd(), "src", "base", "playwright"),
+  "serenity": path.join(process.cwd(), "src", "base", "serenity"),
 }
 
 function copyDirRecursive(src, dest) {
   fs.mkdirSync(dest, { recursive: true })
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const srcPath  = path.join(src, entry.name)
+    const srcPath = path.join(src, entry.name)
     const destPath = path.join(dest, entry.name)
     if (entry.isDirectory()) {
       copyDirRecursive(srcPath, destPath)
@@ -32,9 +34,9 @@ function copyDirRecursive(src, dest) {
 }
 
 function resolveBaseDir(url, framework) {
-  const host   = hostNameFolder(url)
+  const host = hostNameFolder(url)
   const subdir = FRAMEWORK_SUBDIR[framework]
-  const base   = path.join(process.cwd(), "generated", host)
+  const base = path.join(process.cwd(), "generated", host)
 
   if (!subdir) return base  // framework sin subcarpeta definida, va directo
 
@@ -92,6 +94,9 @@ export async function generate(payload) {
     body: JSON.stringify(payload)
   }
   const res = await fetch(process.env.MARIONETISTA_URL, envia)
+    .catch((e) => {
+      console.log("error", e)
+    })
 
   if (!res.ok) {
     console.log(await res.text())
@@ -107,7 +112,7 @@ export async function generate(payload) {
     for (const [token, value] of Object.entries(secrets)) {
       result.msg = result.msg.replaceAll(token, value)
     }
-  } catch {}
+  } catch { }
 
   saveFilesFromContent(payload.url, payload.framework, result)
   return true

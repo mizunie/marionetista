@@ -4,7 +4,7 @@ import { startCasesServer } from "./core/casesServer.js"
 
 startCasesServer()
 
-const url = process.argv[2] || "https://www.saucedemo.com"
+const url = process.argv[2] || "http://opencart.abstracta.us/index.php"
 
 const { page } = await launch(url)
 

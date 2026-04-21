@@ -18,9 +18,10 @@ function saveSecret(token, value) {
 
 // Mismo mapeo que generate.js
 const FRAMEWORK_SUBDIR = {
-  "playwright-pom":        "playwright",
-  "playwright-cucumber":   "playwright",
+  "playwright-pom": "playwright",
+  "playwright-cucumber": "playwright",
   "playwright-screenplay": "playwright",
+  "serenity-pom-java": "serenity",
 }
 
 function resolveProjectDir(url, framework) {
@@ -59,7 +60,7 @@ function loadCases(url) {
     const caseName = file.replace(".json", "")
     try {
       result[caseName] = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"))
-    } catch {}
+    } catch { }
   }
   return result
 }
@@ -102,29 +103,53 @@ export function startCasesServer() {
           return res.end("Directorio generado no encontrado")
         }
 
-        // Instalar solo si no hay node_modules
-        if (!fs.existsSync(path.join(dir, "node_modules"))) {
-          console.log("📦 Instalando dependencias en", dir)
-          execSync("pnpm i", { cwd: dir, stdio: "inherit" })
+        // playwright
+        if (framework.startsWith("playwright")) {
+          // Instalar solo si no hay node_modules
+          if (!fs.existsSync(path.join(dir, "node_modules"))) {
+            console.log("📦 Instalando dependencias en", dir)
+            execSync("pnpm i", { cwd: dir, stdio: "inherit" })
+          }
+
+          console.log(`▶️  Ejecutando case @"${caseName}"`)
+          let ok = true
+          try {
+            execSync(`pnpm playwright test --grep "@${caseName}"`, { cwd: dir, stdio: "inherit" })
+          } catch {
+            ok = false
+          }
+
+          // Abre el reporte en el browser si existe
+          const reportIndex = path.join(dir, "playwright-report", "index.html")
+          const reportUrl = fs.existsSync(reportIndex)
+            ? `http://localhost:${PORT}/report?url=${encodeURIComponent(url)}&framework=${encodeURIComponent(framework)}`
+            : null
+          if (reportUrl) console.log("📊 Reporte →", reportUrl)
+
+          res.writeHead(200, { "Content-Type": "application/json" })
+          res.end(JSON.stringify({ ok, reportUrl, ...(!ok && { msg: "Test finalizado con fallos, revisa la consola" }) }))
         }
+        if (framework.startsWith("serenity")) {
+          // no instala
+          console.log(`▶️  Ejecutando case @"${caseName}"`)
+          let ok = true
 
-        console.log(`▶️  Ejecutando case "${caseName}"`)
-        let ok = true
-        try {
-          execSync(`pnpm playwright test --grep "${caseName}"`, { cwd: dir, stdio: "inherit" })
-        } catch {
-          ok = false
+          try {
+            execSync(`mvn test -Dgroups=${caseName}`, {
+              cwd: dir,
+              stdio: "inherit"
+            })
+          } catch {
+            ok = false
+          }
+
+          res.writeHead(200, { "Content-Type": "application/json" })
+          res.end(JSON.stringify({
+            ok,
+            ...(!ok && { msg: "Test finalizado con fallos, revisa la consola" })
+          }))
+          return
         }
-
-        // Abre el reporte en el browser si existe
-        const reportIndex = path.join(dir, "playwright-report", "index.html")
-        const reportUrl = fs.existsSync(reportIndex)
-          ? `http://localhost:${PORT}/report?url=${encodeURIComponent(url)}&framework=${encodeURIComponent(framework)}`
-          : null
-        if (reportUrl) console.log("📊 Reporte →", reportUrl)
-
-        res.writeHead(200, { "Content-Type": "application/json" })
-        res.end(JSON.stringify({ ok, reportUrl, ...(!ok && { msg: "Test finalizado con fallos, revisa la consola" }) }))
       } catch (e) {
         res.writeHead(400)
         res.end(e.message)
@@ -196,15 +221,15 @@ export function startCasesServer() {
 
     // GET /report?url=...&framework=...  — sirve playwright-report como estático
     if (req.method === "GET" && reqUrl.pathname.startsWith("/report")) {
-      const pageUrl   = reqUrl.searchParams.get("url")
+      const pageUrl = reqUrl.searchParams.get("url")
       const framework = reqUrl.searchParams.get("framework")
       if (!pageUrl || !framework) { res.writeHead(400); return res.end("missing params") }
 
-      const dir        = resolveProjectDir(pageUrl, framework)
-      const reportDir  = path.join(dir, "playwright-report")
+      const dir = resolveProjectDir(pageUrl, framework)
+      const reportDir = path.join(dir, "playwright-report")
       // El sub-path dentro del reporte (ej: /report/data/xxx.zip → data/xxx.zip)
-      const subPath    = reqUrl.pathname.replace(/^\/report\/?/, "") || "index.html"
-      const filePath   = path.join(reportDir, subPath)
+      const subPath = reqUrl.pathname.replace(/^\/report\/?/, "") || "index.html"
+      const filePath = path.join(reportDir, subPath)
 
       if (!fs.existsSync(filePath) || !filePath.startsWith(reportDir)) {
         res.writeHead(404); return res.end("not found")
@@ -213,8 +238,8 @@ export function startCasesServer() {
       const ext = path.extname(filePath).toLowerCase()
       const mime = {
         ".html": "text/html", ".js": "application/javascript",
-        ".css": "text/css",   ".json": "application/json",
-        ".png": "image/png",  ".svg": "image/svg+xml",
+        ".css": "text/css", ".json": "application/json",
+        ".png": "image/png", ".svg": "image/svg+xml",
         ".zip": "application/zip", ".webm": "video/webm"
       }[ext] || "application/octet-stream"
 
