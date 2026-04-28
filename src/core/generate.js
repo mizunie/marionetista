@@ -20,17 +20,32 @@ const FRAMEWORK_BASE = {
   "serenity": path.join(process.cwd(), "src", "base", "serenity"),
 }
 
+// 🆕 Lock para evitar copias simultáneas del template
+const copyLocks = new Set()
+
 function copyDirRecursive(src, dest) {
-  fs.mkdirSync(dest, { recursive: true })
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const srcPath = path.join(src, entry.name)
-    const destPath = path.join(dest, entry.name)
-    if (entry.isDirectory()) {
-      copyDirRecursive(srcPath, destPath)
-    } else {
-      fs.copyFileSync(srcPath, destPath)
+  // Si ya se está copiando este destino exacto, esperar un tick y reintentar
+  if (copyLocks.has(dest)) return false
+  copyLocks.add(dest)
+  
+  try {
+    fs.mkdirSync(dest, { recursive: true })
+    for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+      const srcPath = path.join(src, entry.name)
+      const destPath = path.join(dest, entry.name)
+      if (entry.isDirectory()) {
+        copyDirRecursive(srcPath, destPath)
+      } else {
+        // No sobrescribir si el archivo ya existe (evita pisar código generado)
+        if (!fs.existsSync(destPath)) {
+          fs.copyFileSync(srcPath, destPath)
+        }
+      }
     }
+  } finally {
+    copyLocks.delete(dest)
   }
+  return true
 }
 
 function resolveBaseDir(url, framework) {
@@ -38,14 +53,25 @@ function resolveBaseDir(url, framework) {
   const subdir = FRAMEWORK_SUBDIR[framework]
   const base = path.join(process.cwd(), "generated", host)
 
-  if (!subdir) return base  // framework sin subcarpeta definida, va directo
+  if (!subdir) return base
 
   const dir = path.join(base, subdir)
 
   // Si no existe aún, copiar el template base
   if (!fs.existsSync(dir) && FRAMEWORK_BASE[subdir]) {
     console.log(`📁 Inicializando template ${subdir} en`, dir)
-    copyDirRecursive(FRAMEWORK_BASE[subdir], dir)
+    const ok = copyDirRecursive(FRAMEWORK_BASE[subdir], dir)
+    if (!ok) {
+      // Otra generación ya está copiando, esperar un poco
+      console.log("⏳ Template se está inicializando en otra generación, reintentando...")
+      let retries = 0
+      while (!fs.existsSync(dir) && retries < 50) {
+        // Busy-wait simple, suficiente para copia de template que es rápida
+        const start = Date.now()
+        while (Date.now() - start < 100) { /* spin */ }
+        retries++
+      }
+    }
   }
 
   return dir
@@ -84,6 +110,15 @@ export function saveFilesFromContent(url, framework, content) {
 }
 
 export async function generate(payload) {
+  // 🆕 Validación temprana
+  if (!process.env.MARIONETISTA_URL) {
+    console.error("❌ MARIONETISTA_URL no está definida en .env")
+    return false
+  }
+
+  console.log(`🤖 Generando ${Object.keys(payload.cases || {}).length} cases con ${payload.framework}...`)
+  const start = Date.now()
+
   const envia = {
     method: "POST",
     headers: {
@@ -93,13 +128,14 @@ export async function generate(payload) {
     },
     body: JSON.stringify(payload)
   }
+  
   const res = await fetch(process.env.MARIONETISTA_URL, envia)
     .catch((e) => {
       console.log("error", e)
     })
 
-  if (!res.ok) {
-    console.log(await res.text())
+  if (!res || !res.ok) {
+    if (res) console.log(await res.text())
     return false
   }
 
@@ -115,5 +151,7 @@ export async function generate(payload) {
   } catch { }
 
   saveFilesFromContent(payload.url, payload.framework, result)
+  
+  console.log(`✅ Generación completada en ${((Date.now() - start) / 1000).toFixed(1)}s`)
   return true
 }

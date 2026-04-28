@@ -1,5 +1,4 @@
 import { generate } from './generate.js'
-process.loadEnvFile();
 
 function marionetaBoot() {
   if (window.__marionetaBooted) return
@@ -15,6 +14,7 @@ function marionetaBoot() {
   let editingCase = null       // Case que se está editando
   let editingIndex = null      // Índice del step que se está editando
   const selectedCases = new Set() // Cases marcados para generar
+  let lastPosition = "end" // 🆕 Recuerda la última posición usada
 
   // Almacena pasos agrupados por case
   const cases = Object.create(null)
@@ -342,13 +342,13 @@ function marionetaBoot() {
       frozen = null
       editingCase = null
       editingIndex = null
-      // caseInput.value = ""
       actionSel.value = "click"
       deleteBtn.style.display = "none"
       updateStatus()
       renderOpts()
       refreshPositionSelect()
       renderTree()
+      // No reseteamos lastPosition — debe persistir entre steps
     }
 
     // Sincroniza el estado del botón 🚀 según los cases seleccionados
@@ -487,8 +487,11 @@ function marionetaBoot() {
           if (v === "start" && editingIndex === 0) isCurrent = true
           else if (v === `after step ${editingIndex}`) isCurrent = true
           else if (v === "end" && editingIndex === steps.length - 1) isCurrent = true
+        } else {
+          // 🆕 Si no estamos editando, usa lastPosition como default
+          if (v === lastPosition) isCurrent = true
         }
-        return `<option value="${v}"${isCurrent ? " selected" : ""}>${v}${isCurrent ? " ← actual" : ""}</option>`
+        return `<option value="${v}"${isCurrent ? " selected" : ""}>${v}${isCurrent ? (editingIndex !== null ? " ← actual" : "") : ""}</option>`
       }).join("")
     }
 
@@ -511,8 +514,11 @@ function marionetaBoot() {
           if (v === "start" && editingIndex === 0) isCurrent = true
           else if (v === `after step ${editingIndex}`) isCurrent = true
           else if (v === "end" && editingIndex === steps.length - 1) isCurrent = true
+        } else {
+          // 🆕 Si no estamos editando, usa lastPosition como default
+          if (v === lastPosition) isCurrent = true
         }
-        return `<option value="${v}"${isCurrent ? " selected" : ""}>${v}${isCurrent ? " ← actual" : ""}</option>`
+        return `<option value="${v}"${isCurrent ? " selected" : ""}>${v}${isCurrent ? (editingIndex !== null ? " ← actual" : "") : ""}</option>`
       }).join("")
     }
 
@@ -624,6 +630,7 @@ function marionetaBoot() {
           body: JSON.stringify({ url: location.href, caseName: cn, steps: cases[cn] })
         }).catch(() => { })
       }
+      window.__marionetaEmit(cases)
       resetPanel()
     }
 
@@ -675,6 +682,22 @@ function marionetaBoot() {
         // Nuevo step: inserta en la posición elegida
         const newIdx = resolvePosition(currentCase, posValue)
         cases[currentCase].splice(newIdx, 0, data)
+      }
+
+      // 🆕 Guarda la posición elegida para el próximo step
+      // Si eligió "after step N", el próximo default será "after step N+1"
+      // Si eligió "end", seguirá siendo "end"
+      if (posValue === "end") {
+        lastPosition = "end"
+      } else if (posValue === "start") {
+        lastPosition = "start"
+      } else {
+        const m = posValue.match(/after step (\d+)/)
+        if (m) {
+          // El próximo default será after step N+1 (el que acabamos de insertar)
+          const nextPos = parseInt(m[1]) + 1
+          lastPosition = `after step ${nextPos}`
+        }
       }
 
       // Limpia estado de edición
