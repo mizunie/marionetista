@@ -7,6 +7,11 @@ const server = startCasesServer()
 const url = process.argv[2] || "http://localhost:7331"
 
 const { page, context } = await launch(url)
+context.on('close', () => {
+  console.log("\n🛑 Ventana del navegador cerrada. Apagando Marioneta...");
+  server.close();
+  process.exit(0);
+});
 
 // 🆕 Normalizador de URL para Playwright
 function normalizeUrl(input) {
@@ -42,15 +47,34 @@ server.on("open-url", async (targetUrl) => {
   }
 })
 
+// Limpiar al cerrar (Graceful Shutdown)
+let isShuttingDown = false;
+
+async function shutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`\n🛑 Recibido ${signal}. Cerrando Marioneta...`);
+
+  try {
+    // 1. Cerrar el servidor HTTP
+    server.close();
+
+    // 2. Cerrar el contexto de Playwright
+    if (context) {
+      await context.close();
+      console.log("🧹 Navegador cerrado.");
+    }
+  } catch (e) {
+    console.error("Error cerrando:", e.message);
+  } finally {
+    // 3. Matar el proceso
+    process.exit(0);
+  }
+}
+
 // Limpiar al cerrar
-process.on("SIGINT", async () => {
-  console.log("\n👋 Cerrando...")
-  await context.close()
-  process.exit(0)
-})
-process.on("SIGTERM", async () => {
-  await context.close()
-  process.exit(0)
-})
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGHUP", () => shutdown("SIGHUP"));
 
 console.log("🪄 Marioneta lista")
