@@ -570,6 +570,15 @@ function renderApiWorkspace() {
         </div>
       </section>
 
+      <!-- Params de ruta -->
+      <section id="paramsSection" class="bg-slate-800/40 rounded-xl p-4 border border-slate-700/50 hidden">
+        <h2 class="text-sm font-semibold text-white mb-3">
+          Parámetros de ruta
+          <span class="text-xs text-slate-500 font-normal">— nombres de variables en la URL</span>
+        </h2>
+        <div id="paramsList" class="space-y-2"></div>
+      </section>
+
       <!-- 3. Headers -->
       <section class="bg-slate-800/40 rounded-xl p-4 border border-slate-700/50">
         <h2 class="text-sm font-semibold text-white mb-3">
@@ -723,14 +732,55 @@ function renderApiWorkspace() {
       // Cases
       const cList = document.getElementById('casesList');
       cList.innerHTML = '';
+      
+      // Evaluamos qué hay disponible
+      const hasData = p.data && Object.keys(p.data).length > 0;
+      const hasHeaders = p.headers && Object.keys(p.headers).length > 0;
+      const hasParams = p.params && Object.keys(p.params).length > 0;
+
       for (const c of p.cases) {
+        // Lógica para ocultar cases que no aplican
+        if (c === 'missingField' && !hasData) continue;
+        if (c === 'missingHeader' && !hasHeaders) continue;
+        if (c === 'missingParam' && !hasParams) continue;
+
         const id = 'c_' + c;
+        
+        // Solo marcamos por defecto los que tienen sentido (happy y los que sí aplican)
+        // Si quieres que happy salga desmarcado, cámbialo a false
+        const isChecked = true; 
+
         cList.insertAdjacentHTML('beforeend', \`
           <label class="flex items-center gap-2 bg-slate-900/50 rounded-lg px-3 py-2 cursor-pointer hover:bg-slate-900/80">
-            <input type="checkbox" data-kind="case" data-key="\${c}" id="\${id}" checked>
+            <input type="checkbox" data-kind="case" data-key="\${c}" id="\${id}" \${isChecked ? 'checked' : ''}>
             <span class="text-slate-200">\${c}</span>
           </label>
         \`);
+      }
+
+      // Params
+      const paramsSection = document.getElementById('paramsSection');
+      const paramsList = document.getElementById('paramsList');
+      paramsList.innerHTML = '';
+      if (p.params && Object.keys(p.params).length > 0) {
+        paramsSection.classList.remove('hidden');
+        const paramKeys = Object.keys(p.params);
+        for (let i = 0; i < paramKeys.length; i++) {
+          const key = paramKeys[i];
+          const val = p.params[key];
+          paramsList.insertAdjacentHTML('beforeend', \`
+            <div class="flex items-center gap-2 text-xs">
+              <input type="checkbox" data-param-req="\${key}" class="param-req-check">
+              <span class="text-slate-400 font-mono min-w-[120px]">\${key}</span> <!-- Nombre del parámetro -->
+              <span class="text-slate-600">=</span>
+              <span class="text-amber-300 font-mono">\${val}</span> <!-- Valor real -->
+              <span class="text-slate-500 ml-2">→ renombrar:</span>
+              <input type="text" data-param-key="\${key}" class="param-name bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white w-32" value="\${key}">
+            </div>
+          \`);
+        }
+      } else {
+        paramsSection.classList.add('hidden');
       }
     }
 
@@ -930,6 +980,17 @@ function renderApiWorkspace() {
         }
       }
 
+      const finalParams = {};
+      document.querySelectorAll('.param-name').forEach(input => {
+        const originalKey = input.dataset.paramKey; // ej: "var1"
+        const newKey = input.value.trim() || originalKey;
+        // parsed.params tiene los valores originales que extrajo el backend
+        if (parsed.params && parsed.params[originalKey] !== undefined) {
+          finalParams[newKey] = parsed.params[originalKey];
+        }
+      });
+      window.marionetaParams = finalParams;
+
       window.marionetaVariables = {};
       for (const [caseType, vars] of Object.entries(savedVariables)) {
         Object.assign(window.marionetaVariables, vars);
@@ -952,6 +1013,15 @@ function renderApiWorkspace() {
       const validations = collectValidations();
       
       // 2. Armamos el JSON
+      const finalRequireParams = [];
+      document.querySelectorAll('.param-req-check:checked').forEach(check => {
+        const originalKey = check.dataset.paramReq;
+        // Buscamos el input de nombre para ver si lo renombraron
+        const nameInput = document.querySelector(\`.param-name[data-param-key="\${originalKey}"]\`);
+        const finalName = nameInput ? nameInput.value.trim() : originalKey;
+        finalRequireParams.push(finalName);
+      });
+
       const final = {
         url: document.getElementById('url').value,
         path: document.getElementById('path').value,
@@ -974,7 +1044,9 @@ function renderApiWorkspace() {
         validations: validations,
         
         isSetup: document.getElementById('isSetupCheck').checked, // <-- AHORA LEE EL CHECK DE ARRIBA
-        variables: window.marionetaVariables || {}
+        variables: window.marionetaVariables || {},
+        params: window.marionetaParams || {},
+        requireParams: finalRequireParams,
       };
       
       const el = document.getElementById('previewSection');
@@ -984,6 +1056,16 @@ function renderApiWorkspace() {
     }
 
     async function saveScenario() {
+      // Recoger los params requeridos
+      const finalRequireParams = [];
+      document.querySelectorAll('.param-req-check:checked').forEach(check => {
+        const originalKey = check.dataset.paramReq;
+        // Buscamos el input de nombre para ver si lo renombraron
+        const nameInput = document.querySelector(\`.param-name[data-param-key="\${originalKey}"]\`);
+        const finalName = nameInput ? nameInput.value.trim() : originalKey;
+        finalRequireParams.push(finalName);
+      });
+
       // Reutilizamos la lógica de previsualización para armar el JSON
       const validations = collectValidations();
       const payload = {
@@ -1006,7 +1088,9 @@ function renderApiWorkspace() {
         })(),
         validations: validations,
         isSetup: document.getElementById('isSetupCheck').checked,
-        variables: window.marionetaVariables || {}
+        variables: window.marionetaVariables || {},
+        params: window.marionetaParams || {},
+        requireParams: finalRequireParams,
       };
 
       try {
@@ -1119,6 +1203,16 @@ function renderApiWorkspace() {
 
       const requireFields = collectChecked('data');
       const requireHeaders = collectChecked('header');
+
+      const finalRequireParams = [];
+      document.querySelectorAll('.param-req-check:checked').forEach(check => {
+        // Obtenemos la llave original del dataset
+        const originalKey = check.dataset.paramReq;
+        // Buscamos si el usuario lo renombró en el input de al lado
+        const inputEl = document.querySelector(\`.param-name[data-param-key="\${originalKey}"]\`);
+        const finalKey = inputEl ? inputEl.value.trim() : originalKey;
+        finalRequireParams.push(finalKey || originalKey);
+      });
       
       allResults = {}; // Limpiar resultados anteriores
       const statusEl = document.getElementById('responseStatus');
@@ -1139,6 +1233,8 @@ function renderApiWorkspace() {
             path: document.getElementById('path').value,
             headers: parsed.headers,
             data: parsed.data,
+            params: parsed.params,
+            requireParams: finalRequireParams,
             caseType,
             requireFields,
             requireHeaders,
@@ -1329,25 +1425,62 @@ export function startCasesServer() {
           try { data = JSON.parse(data); } catch { /* deja el string */ }
         }
 
-        const urlObj = new URL(url);
-        const path = urlObj.pathname;
-        const baseUrl = urlObj.origin; // <-- Esto extrae https://fakestoreapi.com
+        // 1. Extraer Path Params y Query Params del objeto original de curlconverter
+        const urlObj = new URL(url); 
+        let path = decodeURIComponent(urlObj.pathname);
+        const baseUrl = urlObj.origin;
+        
+        const params = {};
+        let paramCount = 1;
+
+        // --- PATH PARAMS ---
+        const regex = /(?<!\{)\{([a-zA-Z0-9_]+)\}(?!\})/g;
+        let match;
+        while ((match = regex.exec(path)) !== null) {
+          const rawValue = match[1];
+          let varName = `var${paramCount}`;
+          if (isNaN(Number(rawValue))) varName = rawValue;
+          
+          params[varName] = rawValue;
+          path = path.replace(match[0], `{{${varName}}}`);
+          paramCount++;
+        }
+
+        // --- QUERY PARAMS ---
+        // curlconverter devuelve la query en 'parsed.queries' o 'parsed.query' o 'parsed.params'
+        // Dependiendo de la versión. Vamos a cubrir las opciones más comunes:
+        let queryObj = parsed.queries || parsed.query || parsed.params || null;
+        
+        // Si no lo encontró ahí, intentamos con los searchParams de la URL original
+        if (!queryObj && urlObj.search) {
+            queryObj = Object.fromEntries(urlObj.searchParams.entries());
+        }
+        
+        // Si aún así no hay nada, es probable que curlconverter haya dejado los params en la URL original
+        if (queryObj) {
+            for (const [key, value] of Object.entries(queryObj)) {
+                // Aseguramos que el valor sea string
+                params[key] = String(value);
+            }
+        }
 
         const lastSegment = path.split("/").filter(Boolean).pop() || "default";
-        const caseName = lastSegment;
+        const caseName = lastSegment.replace(/[{}]/g, '');
         const tag = "@default";
 
         const hasAuth = Object.keys(headers).some(k => k.toLowerCase() === "authorization");
-        const cases = ["happy", "missingField", "missingHeader"];
+        const cases = ["happy", "missingField", "missingHeader", "missingParam"];
         if (hasAuth) cases.push("noAuth");
 
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({
-          url: baseUrl, // <-- Ahora enviamos solo la base
-          path,         // <-- El path separado
+          url: baseUrl,
+          path,
           method,
           headers,
           data,
+          params,
+          requireParams: [],
           caseName,
           tag,
           cases,
@@ -1400,20 +1533,22 @@ export function startCasesServer() {
       return;
     }
 
-    // 🔌 POST /api/execute-case  { method, url, headers, data, caseType, requireFields, requireHeaders }
+    // 🔌 POST /api/execute-case  { method, url, headers, data, caseType, requireFields, requireHeaders, requireParams, params }
     if (req.method === "POST" && reqUrl.pathname === "/api/execute-case") {
       try {
-        const { method, url, headers, data, caseType, requireFields, requireHeaders, path } = await readBody(req);
+        const { method, url, path, headers, data, caseType, requireFields, requireHeaders, requireParams, params } = await readBody(req);
         const { deleteProperty } = await import("dot-prop");
 
         // Clonar para no mutar el original
         const finalHeaders = { ...(headers || {}) };
         let finalData = data != null ? JSON.parse(JSON.stringify(data)) : null;
-        let mutated = null; // Para guardar qué se borró
+        let finalParams = { ...(params || {}) }; // Clonamos los params
+        let finalPath = path || "";
+        let mutated = null;
 
         const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
-        // Aplicar mutación según el case
+        // --- 1. Aplicar mutaciones según el case ---
         if (caseType === "missingField" && requireFields?.length && finalData) {
           const fieldToRemove = pickRandom(requireFields);
           deleteProperty(finalData, fieldToRemove);
@@ -1422,11 +1557,28 @@ export function startCasesServer() {
         
         if (caseType === "missingHeader" && requireHeaders?.length) {
           const headerToRemove = pickRandom(requireHeaders);
-          // Borrar case-insensitive
           for (const k of Object.keys(finalHeaders)) {
             if (k.toLowerCase() === headerToRemove.toLowerCase()) delete finalHeaders[k];
           }
           mutated = { type: 'header', path: headerToRemove };
+        }
+
+        if (caseType === "missingParam") {
+          // Elegimos cuál borrar (el marcado como requerido o el primero)
+          const paramToRemove = (requireParams && requireParams.length > 0)
+            ? requireParams[0]
+            : Object.keys(finalParams)[0];
+
+          if (paramToRemove && finalParams[paramToRemove] !== undefined) {
+            // Si está en el path (ej: {{var1}}), lo cambiamos a undefined
+            if (finalPath.includes(`{{${paramToRemove}}}`)) {
+              finalPath = finalPath.replace(`{{${paramToRemove}}}`, "undefined");
+            } else {
+              // Si es query param, lo eliminamos
+              delete finalParams[paramToRemove];
+            }
+            mutated = { type: 'param', path: paramToRemove };
+          }
         }
         
         if (caseType === "noAuth") {
@@ -1435,12 +1587,34 @@ export function startCasesServer() {
           }
           mutated = { type: 'header', path: 'Authorization' };
         }
-        // happy no muta nada
 
-        const cleanBase = (url || "").replace(/\/$/, ""); 
-        const cleanPath = (path || "").startsWith("/") ? path : "/" + (path || "");
-        const finalUrl = cleanBase + cleanPath;
+        // --- 2. Resolver URL (Path Params + Query Params) ---
+        const paramKeys = Object.keys(finalParams);
+        
+        // Reemplazar los Path Params que quedaron
+        for (let i = 0; i < paramKeys.length; i++) {
+          const key = paramKeys[i];
+          finalPath = finalPath.replace(`{{${key}}}`, finalParams[key]);
+        }
 
+        // Armar los Query Params (los que no están en el path)
+        const queryParts = [];
+        for (let i = 0; i < paramKeys.length; i++) {
+          const key = paramKeys[i];
+          if (!path.includes(`{{${key}}}`) && finalParams[key] !== "") {
+            queryParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(finalParams[key])}`);
+          }
+        }
+
+        const cleanBase = (url || "").replace(/\/$/, "");
+        const cleanPath = finalPath.startsWith("/") ? finalPath : "/" + finalPath;
+        let finalUrl = cleanBase + cleanPath;
+        
+        if (queryParts.length > 0) {
+          finalUrl += "?" + queryParts.join("&");
+        }
+
+        // --- 3. Fetch ---
         const fetchOpts = { method: method || "GET", headers: finalHeaders };
         if (fetchOpts.method !== "GET" && fetchOpts.method !== "HEAD" && finalData != null) {
           fetchOpts.body = typeof finalData === "string" ? finalData : JSON.stringify(finalData);
@@ -1454,20 +1628,9 @@ export function startCasesServer() {
         let isJson = false;
 
         if (contentType.includes("application/json")) {
-          try {
-            body = JSON.parse(rawText);
-            isJson = true;
-          } catch {
-            body = rawText; // Vino JSON roto o mal formado, guardamos el string
-          }
+          try { body = JSON.parse(rawText); isJson = true; } catch { body = rawText; }
         } else {
-          // Intentar parsear de todas formas por si acaso mienten en el header
-          try {
-            body = JSON.parse(rawText);
-            isJson = true;
-          } catch {
-            body = rawText; 
-          }
+          try { body = JSON.parse(rawText); isJson = true; } catch { body = rawText; }
         }
 
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -1483,7 +1646,7 @@ export function startCasesServer() {
       } catch (e) {
         res.writeHead(400);
         res.end(e.message);
-        console.log(e)
+        console.log(e);
       }
       return;
     }
